@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 import json
 import altair as alt
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.cluster import KMeans
 
 # ---------- Page config ----------
 st.set_page_config(
@@ -10,26 +13,39 @@ st.set_page_config(
     layout="wide",
 )
 
-# ---------- Global styles ----------
+# ---------- Spotify Gradient Background ----------
 st.markdown("""
 <style>
 body {
-    background-color: #000000;
+    background: linear-gradient(135deg, #000000 0%, #0A1A0A 20%, #1DB954 50%, #3D5AFE 100%);
+    background-attachment: fixed;
     color: #FFFFFF;
 }
+
+/* Rounded card container */
 .card {
-    background-color: #111111;
+    background-color: rgba(0,0,0,0.55);
     padding: 20px;
     border-radius: 16px;
     border: 1px solid #333333;
     margin-bottom: 25px;
 }
+
+/* KPI cards */
 .metric-card {
-    background-color: #111111;
+    background-color: rgba(0,0,0,0.55);
     padding: 15px;
     border-radius: 12px;
     border: 1px solid #333333;
     margin-bottom: 15px;
+}
+
+/* Dataframe styling */
+.dataframe tbody tr {
+    color: #FFFFFF;
+}
+.dataframe thead tr {
+    color: #FFFFFF;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -55,6 +71,7 @@ def base_chart(chart):
         )
     )
 
+# ---------- Helpers ----------
 def flatten_record(x):
     if not isinstance(x, dict):
         return None
@@ -65,10 +82,10 @@ def flatten_record(x):
         "track": x.get("master_metadata_track_name"),
         "artist": x.get("master_metadata_album_artist_name"),
         "album": x.get("master_metadata_album_album_name"),
+        "genre": x.get("spotify_track_uri", "Unknown"),  # fallback
         "skipped": x.get("skipped", False),
-        "reason_start": x.get("reason_start"),
-        "reason_end": x.get("reason_end"),
         "shuffle": x.get("shuffle", False),
+        "cover_url": x.get("episode_image_url") or x.get("image_url") or None,
     }
 
 def load_files(files):
@@ -186,35 +203,27 @@ unique_albums = f["album"].nunique()
 play_count = len(f)
 
 c1, c2, c3, c4, c5 = st.columns(5)
-with c1:
-    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-    st.metric("Listening time", f"{total_hours:,.1f} hrs")
-    st.markdown('</div>', unsafe_allow_html=True)
-with c2:
-    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-    st.metric("Listening events", f"{play_count:,}")
-    st.markdown('</div>', unsafe_allow_html=True)
-with c3:
-    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-    st.metric("Unique songs", f"{unique_songs:,}")
-    st.markdown('</div>', unsafe_allow_html=True)
-with c4:
-    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-    st.metric("Unique artists", f"{unique_artists:,}")
-    st.markdown('</div>', unsafe_allow_html=True)
-with c5:
-    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-    st.metric("Unique albums", f"{unique_albums:,}")
-    st.markdown('</div>', unsafe_allow_html=True)
+for col, label, value in [
+    (c1, "Listening time", f"{total_hours:,.1f} hrs"),
+    (c2, "Listening events", f"{play_count:,}"),
+    (c3, "Unique songs", f"{unique_songs:,}"),
+    (c4, "Unique artists", f"{unique_artists:,}"),
+    (c5, "Unique albums", f"{unique_albums:,}")
+]:
+    with col:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.metric(label, value)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------- Tabs ----------
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "🏆 Top Music",
     "📈 Evolution",
     "⏰ When You Listen",
     "🔁 Replay & Habits",
     "🎧 Deep Cuts",
     "📝 Yearly Wrapped",
+    "🎨 Genre Clusters",
 ])
 
 # ---------- Top Music ----------
@@ -223,13 +232,14 @@ with tab1:
 
     col1, col2 = st.columns(2)
 
+    # Top Artists
     with col1:
         st.markdown("#### Top artists by listening time")
         artists_df = top_table(f, "artist", 15)
 
         chart = alt.Chart(artists_df).mark_bar(color=PRIMARY).encode(
-            x=alt.X("minutes:Q", title="Minutes listened"),
-            y=alt.Y("artist:N", sort="-x", title=None),
+            x="minutes:Q",
+            y=alt.Y("artist:N", sort="-x"),
             tooltip=["artist", "minutes", "plays"]
         ).properties(height=400)
 
@@ -239,25 +249,32 @@ with tab1:
 
         st.dataframe(artists_df, use_container_width=True, hide_index=True)
 
+    # Top Songs + Album Art
     with col2:
         st.markdown("#### Top songs by listening time")
         songs_df = top_table(f, "track", 15)
 
-        chart = alt.Chart(songs_df).mark_bar(color=SECONDARY).encode(
-            x=alt.X("minutes:Q", title="Minutes listened"),
-            y=alt.Y("track:N", sort="-x", title=None),
-            tooltip=["track", "minutes", "plays"]
-        ).properties(height=400)
+        # Add album art thumbnails
+        songs_df["cover"] = songs_df["track"].map(
+            lambda t: f[f["track"] == t]["cover_url"].dropna().iloc[0]
+            if any(f[f["track"] == t]["cover_url"].notna())
+            else None
+        )
 
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.altair_chart(base_chart(chart), use_container_width=True)
+        for _, row in songs_df.iterrows():
+            st.markdown(
+                f"""
+                <div style="display:flex;align-items:center;margin-bottom:10px;">
+                    <img src="{row['cover']}" style="width:50px;height:50px;border-radius:8px;margin-right:10px;">
+                    <span style="font-size:16px;">{row['track']} — {row['minutes']:.1f} min</span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
         st.markdown('</div>', unsafe_allow_html=True)
 
         st.dataframe(songs_df, use_container_width=True, hide_index=True)
-
-    st.markdown("#### Top albums")
-    albums_df = top_table(f, "album", 15)
-    st.dataframe(albums_df, use_container_width=True, hide_index=True)
 
 # ---------- Evolution ----------
 with tab2:
@@ -275,10 +292,9 @@ with tab2:
          .reset_index()
     )
 
-    st.markdown("#### Listening time by year")
     chart = alt.Chart(yearly).mark_line(color=PRIMARY, point=True).encode(
-        x=alt.X("year:O", title="Year"),
-        y=alt.Y("hours:Q", title="Hours listened"),
+        x="year:O",
+        y="hours:Q",
         tooltip=["year", "hours"]
     ).properties(height=300)
 
@@ -288,79 +304,30 @@ with tab2:
 
     st.dataframe(yearly, use_container_width=True, hide_index=True)
 
-    st.markdown("#### Top artists by year")
-    year_artist = (
-        f.groupby(["year", "artist"])["minutes"]
-         .sum()
-         .reset_index()
-         .sort_values(["year", "minutes"], ascending=[True, False])
-    )
-    year_artist["rank"] = year_artist.groupby("year").cumcount() + 1
-
-    st.dataframe(
-        year_artist[year_artist["rank"] <= 10],
-        use_container_width=True,
-        hide_index=True
-    )
-
-    st.markdown("#### Artists that persisted across years")
-    artist_years = (
-        f.groupby("artist")["year"]
-         .nunique()
-         .sort_values(ascending=False)
-         .head(20)
-         .reset_index(name="years_listened")
-    )
-    st.dataframe(artist_years, use_container_width=True, hide_index=True)
-
 # ---------- When ----------
 with tab3:
     st.subheader("When do you listen?")
 
     hourly = f.groupby("hour")["minutes"].sum().reset_index()
-    weekday_order = [
-        "Monday", "Tuesday", "Wednesday", "Thursday",
-        "Friday", "Saturday", "Sunday"
-    ]
-    weekday = (
-        f.groupby("weekday")["minutes"]
-         .sum()
-         .reindex(weekday_order)
-         .reset_index()
-    )
+    weekday_order = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+    weekday = f.groupby("weekday")["minutes"].sum().reindex(weekday_order).reset_index()
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("#### Listening by hour")
-        chart = alt.Chart(hourly).mark_bar(color=ACCENT_COOL).encode(
-            x=alt.X("hour:O", title="Hour of day"),
-            y=alt.Y("minutes:Q", title="Minutes listened"),
-            tooltip=["hour", "minutes"]
-        ).properties(height=300)
+    # Hour chart
+    chart = alt.Chart(hourly).mark_bar(color=ACCENT_COOL).encode(
+        x="hour:O",
+        y="minutes:Q",
+        tooltip=["hour","minutes"]
+    ).properties(height=300)
 
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.altair_chart(base_chart(chart), use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.altair_chart(base_chart(chart), use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    with col2:
-        st.markdown("#### Listening by day of week")
-        chart = alt.Chart(weekday).mark_bar(color=ACCENT_WARM).encode(
-            x=alt.X("weekday:N", sort=weekday_order, title=None),
-            y=alt.Y("minutes:Q", title="Minutes listened"),
-            tooltip=["weekday", "minutes"]
-        ).properties(height=300)
-
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.altair_chart(base_chart(chart), use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown("#### Listening over time")
-    daily = f.groupby("date")["minutes"].sum().reset_index()
-
-    chart = alt.Chart(daily).mark_line(color=SECONDARY, point=True).encode(
-        x=alt.X("date:T", title="Date"),
-        y=alt.Y("minutes:Q", title="Minutes listened"),
-        tooltip=["date", "minutes"]
+    # Day chart
+    chart = alt.Chart(weekday).mark_bar(color=ACCENT_WARM).encode(
+        x=alt.X("weekday:N", sort=weekday_order),
+        y="minutes:Q",
+        tooltip=["weekday","minutes"]
     ).properties(height=300)
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -368,27 +335,17 @@ with tab3:
     st.markdown('</div>', unsafe_allow_html=True)
 
     # Heatmaps
+    heat_df = f.groupby(["weekday","hour"])["minutes"].sum().reset_index()
+    session_df = f.groupby(["weekday","hour"])["track"].count().reset_index().rename(columns={"track":"plays"})
+
     st.markdown("#### Listening intensity heatmap")
-    heat_df = (
-        f.groupby(["weekday", "hour"])["minutes"]
-         .sum()
-         .reset_index()
-    )
-    chart = heatmap(heat_df, "minutes", "Listening Intensity", "greens")
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(heatmap(heat_df, "minutes", "Listening Intensity", "greens"), use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("#### Session stamina heatmap")
-    session_df = (
-        f.groupby(["weekday", "hour"])["track"]
-         .count()
-         .reset_index()
-         .rename(columns={"track": "plays"})
-    )
-    chart = heatmap(session_df, "plays", "Session Stamina", "oranges")
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(heatmap(session_df, "plays", "Session Stamina", "oranges"), use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------- Replay / habits ----------
@@ -396,54 +353,31 @@ with tab4:
     st.subheader("🔁 Replay & listening personality")
 
     song_stats = (
-        f.groupby(["track", "artist"])
+        f.groupby(["track","artist"])
          .agg(
-             plays=("track", "size"),
-             minutes=("minutes", "sum"),
-             avg_minutes=("minutes", "mean"),
-             skips=("skipped", "sum"),
+             plays=("track","size"),
+             minutes=("minutes","sum"),
+             avg_minutes=("minutes","mean"),
+             skips=("skipped","sum"),
          )
          .reset_index()
     )
     song_stats["skip_rate"] = song_stats["skips"] / song_stats["plays"]
 
     c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-        st.metric("Avg. play length", f"{f['minutes'].mean():.2f} min")
-        st.markdown('</div>', unsafe_allow_html=True)
-    with c2:
-        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-        st.metric("Skip rate", f"{100*f['skipped'].mean():.1f}%")
-        st.markdown('</div>', unsafe_allow_html=True)
-    with c3:
-        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-        st.metric("Shuffle rate", f"{100*f['shuffle'].mean():.1f}%")
-        st.markdown('</div>', unsafe_allow_html=True)
+    for col, label, value in [
+        (c1, "Avg. play length", f"{f['minutes'].mean():.2f} min"),
+        (c2, "Skip rate", f"{100*f['skipped'].mean():.1f}%"),
+        (c3, "Shuffle rate", f"{100*f['shuffle'].mean():.1f}%"),
+    ]:
+        with col:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.metric(label, value)
+            st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("#### Your most replayed songs")
-    replay = song_stats.sort_values(["plays", "minutes"], ascending=False).head(25)
+    replay = song_stats.sort_values(["plays","minutes"], ascending=False).head(25)
     st.dataframe(replay, use_container_width=True, hide_index=True)
-
-    st.markdown("#### Songs you almost never skip")
-    completed = song_stats[song_stats["plays"] >= 3].sort_values(
-        ["skip_rate", "plays"], ascending=[True, False]
-    ).head(25)
-    st.dataframe(completed, use_container_width=True, hide_index=True)
-
-    st.markdown("#### Songs with unusually high repeat behavior")
-    repeat = song_stats[song_stats["plays"] >= 5].copy()
-    if not repeat.empty:
-        top_repeat = repeat.sort_values("plays", ascending=False).head(20)
-        chart = alt.Chart(top_repeat).mark_bar(color=PRIMARY).encode(
-            x=alt.X("plays:Q", title="Plays"),
-            y=alt.Y("track:N", sort="-x", title=None),
-            tooltip=["track", "artist", "plays"]
-        ).properties(height=400)
-
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.altair_chart(base_chart(chart), use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------- Deep cuts ----------
 with tab5:
@@ -452,34 +386,17 @@ with tab5:
     artist_stats = (
         f.groupby("artist")
          .agg(
-             minutes=("minutes", "sum"),
-             plays=("track", "size"),
-             unique_songs=("track", "nunique"),
+             minutes=("minutes","sum"),
+             plays=("track","size"),
+             unique_songs=("track","nunique"),
          )
          .reset_index()
     )
-    artist_stats["minutes_per_song"] = (
-        artist_stats["minutes"] / artist_stats["unique_songs"]
-    )
+    artist_stats["minutes_per_song"] = artist_stats["minutes"] / artist_stats["unique_songs"]
 
     st.markdown("#### Artists you go deep on")
-    deep = artist_stats[artist_stats["plays"] >= 5].sort_values(
-        "minutes_per_song", ascending=False
-    ).head(25)
+    deep = artist_stats[artist_stats["plays"] >= 5].sort_values("minutes_per_song", ascending=False).head(25)
     st.dataframe(deep, use_container_width=True, hide_index=True)
-
-    st.markdown("#### Album listening")
-    album_stats = (
-        f.groupby(["artist", "album"])
-         .agg(
-             plays=("track", "size"),
-             minutes=("minutes", "sum"),
-             unique_tracks=("track", "nunique"),
-         )
-         .reset_index()
-         .sort_values("minutes", ascending=False)
-    )
-    st.dataframe(album_stats.head(50), use_container_width=True, hide_index=True)
 
 # ---------- Wrapped ----------
 with tab6:
@@ -490,62 +407,50 @@ with tab6:
         if y.empty:
             continue
 
-        top_artist = (
-            y.groupby("artist")["minutes"].sum().sort_values(ascending=False).index[0]
-        )
-        top_song = (
-            y.groupby("track")["minutes"].sum().sort_values(ascending=False).index[0]
-        )
-        top_album = (
-            y.groupby("album")["minutes"].sum().sort_values(ascending=False).index[0]
-        )
+        top_artist = y.groupby("artist")["minutes"].sum().idxmax()
+        top_song = y.groupby("track")["minutes"].sum().idxmax()
+        top_album = y.groupby("album")["minutes"].sum().idxmax()
 
         with st.expander(f"🎧 {int(year)}"):
             a, b, c, d = st.columns(4)
-            with a:
-                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-                st.metric("Hours", f"{y['minutes'].sum()/60:,.1f}")
-                st.markdown('</div>', unsafe_allow_html=True)
-            with b:
-                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-                st.metric("Top artist", top_artist)
-                st.markdown('</div>', unsafe_allow_html=True)
-            with c:
-                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-                st.metric("Top song", top_song)
-                st.markdown('</div>', unsafe_allow_html=True)
-            with d:
-                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-                st.metric("Top album", top_album)
-                st.markdown('</div>', unsafe_allow_html=True)
+            for col, label, value in [
+                (a, "Hours", f"{y['minutes'].sum()/60:,.1f}"),
+                (b, "Top artist", top_artist),
+                (c, "Top song", top_song),
+                (d, "Top album", top_album),
+            ]:
+                with col:
+                    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                    st.metric(label, value)
+                    st.markdown('</div>', unsafe_allow_html=True)
 
-            ya = (
-                y.groupby("artist")["minutes"]
-                 .sum()
-                 .sort_values(ascending=False)
-                 .head(10)
-                 .reset_index()
-            )
+# ---------- Genre Clustering ----------
+with tab7:
+    st.subheader("🎨 Genre Clustering")
 
-            chart = alt.Chart(ya).mark_bar(color=SECONDARY).encode(
-                x=alt.X("minutes:Q", title="Minutes listened"),
-                y=alt.Y("artist:N", sort="-x", title=None),
-                tooltip=["artist", "minutes"]
-            ).properties(height=300)
+    # Fallback genre text
+    f["genre_text"] = f["genre"].fillna("Unknown")
 
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            st.altair_chart(base_chart(chart), use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
+    vectorizer = TfidfVectorizer(stop_words="english")
+    X = vectorizer.fit_transform(f["genre_text"])
+
+    kmeans = KMeans(n_clusters=5, random_state=42)
+    f["cluster"] = kmeans.fit_predict(X)
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.write("Your listening grouped into 5 genre clusters:")
+    st.dataframe(f[["artist","track","genre_text","cluster"]], use_container_width=True, hide_index=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------- Download ----------
 st.divider()
 st.subheader("📥 Export your analysis")
 
 summary = (
-    f.groupby(["artist", "track", "album"])
+    f.groupby(["artist","track","album"])
      .agg(
-         plays=("track", "size"),
-         minutes=("minutes", "sum"),
+         plays=("track","size"),
+         minutes=("minutes","sum"),
      )
      .reset_index()
      .sort_values("minutes", ascending=False)
@@ -559,6 +464,4 @@ st.download_button(
     mime="text/csv"
 )
 
-st.caption(
-    "Privacy note: this app intentionally ignores the ip_addr field."
-)
+st.caption("Privacy note: this app intentionally ignores the ip_addr field.")
