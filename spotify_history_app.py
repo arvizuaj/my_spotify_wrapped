@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import json
 import altair as alt
-from io import BytesIO
 
 # ---------- Page config ----------
 st.set_page_config(
@@ -16,13 +15,10 @@ PRIMARY = "#1DB954"   # Spotify green
 SECONDARY = "#3D5AFE" # Indigo
 ACCENT_WARM = "#FF6D00"
 ACCENT_COOL = "#00B8D4"
-BG_LIGHT = "#ECEFF1"
 TEXT_DARK = "#263238"
 
-alt.themes.enable("default")
-
-def base_chart():
-    return alt.Chart().configure_view(
+def base_chart(chart):
+    return chart.configure_view(
         strokeWidth=0
     ).configure_axis(
         labelColor=TEXT_DARK,
@@ -47,7 +43,6 @@ def flatten_record(x):
         "reason_start": x.get("reason_start"),
         "reason_end": x.get("reason_end"),
         "shuffle": x.get("shuffle", False),
-        # Deliberately do NOT read ip_addr.
     }
 
 def load_files(files):
@@ -77,13 +72,11 @@ def load_files(files):
     df["minutes"] = df["ms_played"] / 60000
     df["hours"] = df["minutes"] / 60
 
-    df["timestamp_utc"] = df["timestamp"]
     df["date"] = df["timestamp"].dt.date
     df["year"] = df["timestamp"].dt.year
     df["month"] = df["timestamp"].dt.to_period("M").astype(str)
     df["hour"] = df["timestamp"].dt.hour
     df["weekday"] = df["timestamp"].dt.day_name()
-    df["weekday_num"] = df["timestamp"].dt.dayofweek
 
     return df, bad_files
 
@@ -106,24 +99,10 @@ files = st.sidebar.file_uploader(
     "Upload Streaming_History_Audio_*.json files",
     type=["json"],
     accept_multiple_files=True,
-    help="You can upload multiple years/files at once."
 )
 
 if not files:
     st.info("👈 Upload one or more Spotify audio-history JSON files to begin.")
-    st.markdown("""
-### What you'll get
-
-- 🎵 Music DNA — top songs, artists, albums and total listening
-- 📈 Taste evolution across years
-- 🧠 Listening personality
-- ⏰ When you listen
-- 🔁 Replay & obsession analysis
-- 🎧 Deep-cut discoveries
-- 🏆 Your own Spotify Wrapped
-- 📊 Interactive charts and filters
-- 📥 Downloadable summary tables
-""")
     st.stop()
 
 df, bad_files = load_files(files)
@@ -144,16 +123,11 @@ years = sorted(df["year"].dropna().unique().tolist())
 selected_years = st.sidebar.multiselect("Years", years, default=years)
 
 artists = sorted(df["artist"].dropna().unique().tolist())
-artist_filter = st.sidebar.multiselect(
-    "Artists (optional)",
-    artists,
-    default=[],
-)
+artist_filter = st.sidebar.multiselect("Artists (optional)", artists, default=[])
 
 min_minutes = st.sidebar.slider(
     "Minimum minutes counted per play",
     0.0, 5.0, 0.0, 0.25,
-    help="Useful for excluding accidental taps or near-instant skips."
 )
 
 f = df[df["year"].isin(selected_years)].copy()
@@ -167,7 +141,7 @@ if f.empty:
     st.warning("No listening events match your filters.")
     st.stop()
 
-# ---------- Overview / hero metrics ----------
+# ---------- Overview ----------
 st.header("🎵 Your Music DNA")
 
 total_hours = f["minutes"].sum() / 60
@@ -203,38 +177,26 @@ with tab1:
         st.markdown("#### Top artists by listening time")
         artists_df = top_table(f, "artist", 15)
 
-        chart = (
-            base_chart()
-            .mark_bar(color=PRIMARY)
-            .encode(
-                x=alt.X("minutes:Q", title="Minutes listened"),
-                y=alt.Y("artist:N", sort="-x", title=None),
-                tooltip=["artist", "minutes", "plays"]
-            )
-            .properties(height=400)
-            .interactive()
-        ).transform_data(data=artists_df)
+        chart = alt.Chart(artists_df).mark_bar(color=PRIMARY).encode(
+            x=alt.X("minutes:Q", title="Minutes listened"),
+            y=alt.Y("artist:N", sort="-x", title=None),
+            tooltip=["artist", "minutes", "plays"]
+        ).properties(height=400)
 
-        st.altair_chart(chart, use_container_width=True)
+        st.altair_chart(base_chart(chart), use_container_width=True)
         st.dataframe(artists_df, use_container_width=True, hide_index=True)
 
     with col2:
         st.markdown("#### Top songs by listening time")
         songs_df = top_table(f, "track", 15)
 
-        chart = (
-            base_chart()
-            .mark_bar(color=SECONDARY)
-            .encode(
-                x=alt.X("minutes:Q", title="Minutes listened"),
-                y=alt.Y("track:N", sort="-x", title=None),
-                tooltip=["track", "minutes", "plays"]
-            )
-            .properties(height=400)
-            .interactive()
-        ).transform_data(data=songs_df)
+        chart = alt.Chart(songs_df).mark_bar(color=SECONDARY).encode(
+            x=alt.X("minutes:Q", title="Minutes listened"),
+            y=alt.Y("track:N", sort="-x", title=None),
+            tooltip=["track", "minutes", "plays"]
+        ).properties(height=400)
 
-        st.altair_chart(chart, use_container_width=True)
+        st.altair_chart(base_chart(chart), use_container_width=True)
         st.dataframe(songs_df, use_container_width=True, hide_index=True)
 
     st.markdown("#### Top albums")
@@ -258,19 +220,13 @@ with tab2:
     )
 
     st.markdown("#### Listening time by year")
-    chart = (
-        base_chart()
-        .mark_line(color=PRIMARY, point=alt.OverlayMarkDef(color=ACCENT_COOL))
-        .encode(
-            x=alt.X("year:O", title="Year"),
-            y=alt.Y("hours:Q", title="Hours listened"),
-            tooltip=["year", "hours"]
-        )
-        .properties(height=300)
-        .interactive()
-    ).transform_data(data=yearly)
-    st.altair_chart(chart, use_container_width=True)
+    chart = alt.Chart(yearly).mark_line(color=PRIMARY, point=True).encode(
+        x=alt.X("year:O", title="Year"),
+        y=alt.Y("hours:Q", title="Hours listened"),
+        tooltip=["year", "hours"]
+    ).properties(height=300)
 
+    st.altair_chart(base_chart(chart), use_container_width=True)
     st.dataframe(yearly, use_container_width=True, hide_index=True)
 
     st.markdown("#### Top artists by year")
@@ -317,48 +273,34 @@ with tab3:
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("#### Listening by hour")
-        chart = (
-            base_chart()
-            .mark_bar(color=ACCENT_COOL)
-            .encode(
-                x=alt.X("hour:O", title="Hour of day"),
-                y=alt.Y("minutes:Q", title="Minutes listened"),
-                tooltip=["hour", "minutes"]
-            )
-            .properties(height=300)
-            .interactive()
-        ).transform_data(data=hourly)
-        st.altair_chart(chart, use_container_width=True)
+        chart = alt.Chart(hourly).mark_bar(color=ACCENT_COOL).encode(
+            x=alt.X("hour:O", title="Hour of day"),
+            y=alt.Y("minutes:Q", title="Minutes listened"),
+            tooltip=["hour", "minutes"]
+        ).properties(height=300)
+
+        st.altair_chart(base_chart(chart), use_container_width=True)
 
     with col2:
         st.markdown("#### Listening by day of week")
-        chart = (
-            base_chart()
-            .mark_bar(color=ACCENT_WARM)
-            .encode(
-                x=alt.X("weekday:N", sort=weekday_order, title=None),
-                y=alt.Y("minutes:Q", title="Minutes listened"),
-                tooltip=["weekday", "minutes"]
-            )
-            .properties(height=300)
-            .interactive()
-        ).transform_data(data=weekday)
-        st.altair_chart(chart, use_container_width=True)
+        chart = alt.Chart(weekday).mark_bar(color=ACCENT_WARM).encode(
+            x=alt.X("weekday:N", sort=weekday_order, title=None),
+            y=alt.Y("minutes:Q", title="Minutes listened"),
+            tooltip=["weekday", "minutes"]
+        ).properties(height=300)
+
+        st.altair_chart(base_chart(chart), use_container_width=True)
 
     st.markdown("#### Listening over time")
     daily = f.groupby("date")["minutes"].sum().reset_index()
-    chart = (
-        base_chart()
-        .mark_line(color=SECONDARY, point=alt.OverlayMarkDef(color=PRIMARY))
-        .encode(
-            x=alt.X("date:T", title="Date"),
-            y=alt.Y("minutes:Q", title="Minutes listened"),
-            tooltip=["date", "minutes"]
-        )
-        .properties(height=300)
-        .interactive()
-    ).transform_data(data=daily)
-    st.altair_chart(chart, use_container_width=True)
+
+    chart = alt.Chart(daily).mark_line(color=SECONDARY, point=True).encode(
+        x=alt.X("date:T", title="Date"),
+        y=alt.Y("minutes:Q", title="Minutes listened"),
+        tooltip=["date", "minutes"]
+    ).properties(height=300)
+
+    st.altair_chart(base_chart(chart), use_container_width=True)
 
 # ---------- Replay / habits ----------
 with tab4:
@@ -394,18 +336,14 @@ with tab4:
     st.markdown("#### Songs with unusually high repeat behavior")
     repeat = song_stats[song_stats["plays"] >= 5].copy()
     if not repeat.empty:
-        chart = (
-            base_chart()
-            .mark_bar(color=PRIMARY)
-            .encode(
-                x=alt.X("plays:Q", title="Plays"),
-                y=alt.Y("track:N", sort="-x", title=None),
-                tooltip=["track", "artist", "plays"]
-            )
-            .properties(height=400)
-            .interactive()
-        ).transform_data(data=repeat.sort_values("plays", ascending=False).head(20))
-        st.altair_chart(chart, use_container_width=True)
+        top_repeat = repeat.sort_values("plays", ascending=False).head(20)
+        chart = alt.Chart(top_repeat).mark_bar(color=PRIMARY).encode(
+            x=alt.X("plays:Q", title="Plays"),
+            y=alt.Y("track:N", sort="-x", title=None),
+            tooltip=["track", "artist", "plays"]
+        ).properties(height=400)
+
+        st.altair_chart(base_chart(chart), use_container_width=True)
 
 # ---------- Deep cuts ----------
 with tab5:
@@ -482,18 +420,14 @@ with tab6:
                  .head(10)
                  .reset_index()
             )
-            chart = (
-                base_chart()
-                .mark_bar(color=SECONDARY)
-                .encode(
-                    x=alt.X("minutes:Q", title="Minutes listened"),
-                    y=alt.Y("artist:N", sort="-x", title=None),
-                    tooltip=["artist", "minutes"]
-                )
-                .properties(height=300)
-                .interactive()
-            ).transform_data(data=ya)
-            st.altair_chart(chart, use_container_width=True)
+
+            chart = alt.Chart(ya).mark_bar(color=SECONDARY).encode(
+                x=alt.X("minutes:Q", title="Minutes listened"),
+                y=alt.Y("artist:N", sort="-x", title=None),
+                tooltip=["artist", "minutes"]
+            ).properties(height=300)
+
+            st.altair_chart(base_chart(chart), use_container_width=True)
 
 # ---------- Download ----------
 st.divider()
@@ -518,6 +452,5 @@ st.download_button(
 )
 
 st.caption(
-    "Privacy note: this app intentionally ignores the ip_addr field and does not "
-    "need it for any analysis."
+    "Privacy note: this app intentionally ignores the ip_addr field."
 )
