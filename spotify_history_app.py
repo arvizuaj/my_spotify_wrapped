@@ -10,23 +10,47 @@ st.set_page_config(
     layout="wide",
 )
 
-# ---------- Theme / helpers ----------
+# ---------- Global styles ----------
+st.markdown("""
+<style>
+body {
+    background-color: #000000;
+    color: #FFFFFF;
+}
+.card {
+    background-color: #111111;
+    padding: 20px;
+    border-radius: 16px;
+    border: 1px solid #333333;
+    margin-bottom: 25px;
+}
+.metric-card {
+    background-color: #111111;
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid #333333;
+}
+</style>
+""", unsafe_allow_html=True)
+
 PRIMARY = "#1DB954"   # Spotify green
 SECONDARY = "#3D5AFE" # Indigo
 ACCENT_WARM = "#FF6D00"
 ACCENT_COOL = "#00B8D4"
-TEXT_DARK = "#263238"
+TEXT_LIGHT = "#F5F5F5"
+
+alt.themes.enable("default")
 
 def base_chart(chart):
     return chart.configure_view(
         strokeWidth=0
     ).configure_axis(
-        labelColor=TEXT_DARK,
-        titleColor=TEXT_DARK,
-        gridColor="#CFD8DC"
+        labelColor=TEXT_LIGHT,
+        titleColor=TEXT_LIGHT,
+        gridColor="#444444"
     ).configure_legend(
-        labelColor=TEXT_DARK,
-        titleColor=TEXT_DARK
+        labelColor=TEXT_LIGHT,
+        titleColor=TEXT_LIGHT
     )
 
 def flatten_record(x):
@@ -88,6 +112,15 @@ def top_table(df, col, n=10):
           .head(n)
           .reset_index()
     )
+
+def heatmap(df, value_col, title, colors):
+    chart = alt.Chart(df).mark_rect().encode(
+        x=alt.X("hour:O", title="Hour"),
+        y=alt.Y("weekday:N", title="Day"),
+        color=alt.Color(f"{value_col}:Q", scale=alt.Scale(scheme=colors)),
+        tooltip=["weekday", "hour", value_col]
+    ).properties(height=300, title=title)
+    return base_chart(chart)
 
 # ---------- Header ----------
 st.title("🎧 Spotify History Analyzer")
@@ -151,11 +184,26 @@ unique_albums = f["album"].nunique()
 play_count = len(f)
 
 c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("Listening time", f"{total_hours:,.1f} hrs")
-c2.metric("Listening events", f"{play_count:,}")
-c3.metric("Unique songs", f"{unique_songs:,}")
-c4.metric("Unique artists", f"{unique_artists:,}")
-c5.metric("Unique albums", f"{unique_albums:,}")
+with c1:
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+    st.metric("Listening time", f"{total_hours:,.1f} hrs")
+    st.markdown('</div>', unsafe_allow_html=True)
+with c2:
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+    st.metric("Listening events", f"{play_count:,}")
+    st.markdown('</div>', unsafe_allow_html=True)
+with c3:
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+    st.metric("Unique songs", f"{unique_songs:,}")
+    st.markdown('</div>', unsafe_allow_html=True)
+with c4:
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+    st.metric("Unique artists", f"{unique_artists:,}")
+    st.markdown('</div>', unsafe_allow_html=True)
+with c5:
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+    st.metric("Unique albums", f"{unique_albums:,}")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------- Tabs ----------
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
@@ -183,7 +231,10 @@ with tab1:
             tooltip=["artist", "minutes", "plays"]
         ).properties(height=400)
 
+        st.markdown('<div class="card">', unsafe_allow_html=True)
         st.altair_chart(base_chart(chart), use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
         st.dataframe(artists_df, use_container_width=True, hide_index=True)
 
     with col2:
@@ -196,7 +247,10 @@ with tab1:
             tooltip=["track", "minutes", "plays"]
         ).properties(height=400)
 
+        st.markdown('<div class="card">', unsafe_allow_html=True)
         st.altair_chart(base_chart(chart), use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
         st.dataframe(songs_df, use_container_width=True, hide_index=True)
 
     st.markdown("#### Top albums")
@@ -226,7 +280,10 @@ with tab2:
         tooltip=["year", "hours"]
     ).properties(height=300)
 
+    st.markdown('<div class="card">', unsafe_allow_html=True)
     st.altair_chart(base_chart(chart), use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
     st.dataframe(yearly, use_container_width=True, hide_index=True)
 
     st.markdown("#### Top artists by year")
@@ -279,7 +336,9 @@ with tab3:
             tooltip=["hour", "minutes"]
         ).properties(height=300)
 
+        st.markdown('<div class="card">', unsafe_allow_html=True)
         st.altair_chart(base_chart(chart), use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
     with col2:
         st.markdown("#### Listening by day of week")
@@ -289,7 +348,9 @@ with tab3:
             tooltip=["weekday", "minutes"]
         ).properties(height=300)
 
+        st.markdown('<div class="card">', unsafe_allow_html=True)
         st.altair_chart(base_chart(chart), use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("#### Listening over time")
     daily = f.groupby("date")["minutes"].sum().reset_index()
@@ -300,7 +361,33 @@ with tab3:
         tooltip=["date", "minutes"]
     ).properties(height=300)
 
+    st.markdown('<div class="card">', unsafe_allow_html=True)
     st.altair_chart(base_chart(chart), use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Heatmaps
+    st.markdown("#### Listening intensity heatmap")
+    heat_df = (
+        f.groupby(["weekday", "hour"])["minutes"]
+         .sum()
+         .reset_index()
+    )
+    chart = heatmap(heat_df, "minutes", "Listening Intensity", "greens")
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.altair_chart(chart, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown("#### Session stamina heatmap")
+    session_df = (
+        f.groupby(["weekday", "hour"])["track"]
+         .count()
+         .reset_index()
+         .rename(columns={"track": "plays"})
+    )
+    chart = heatmap(session_df, "plays", "Session Stamina", "oranges")
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.altair_chart(chart, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------- Replay / habits ----------
 with tab4:
@@ -319,9 +406,18 @@ with tab4:
     song_stats["skip_rate"] = song_stats["skips"] / song_stats["plays"]
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Avg. play length", f"{f['minutes'].mean():.2f} min")
-    c2.metric("Skip rate", f"{100*f['skipped'].mean():.1f}%")
-    c3.metric("Shuffle rate", f"{100*f['shuffle'].mean():.1f}%")
+    with c1:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.metric("Avg. play length", f"{f['minutes'].mean():.2f} min")
+        st.markdown('</div>', unsafe_allow_html=True)
+    with c2:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.metric("Skip rate", f"{100*f['skipped'].mean():.1f}%")
+        st.markdown('</div>', unsafe_allow_html=True)
+    with c3:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.metric("Shuffle rate", f"{100*f['shuffle'].mean():.1f}%")
+        st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("#### Your most replayed songs")
     replay = song_stats.sort_values(["plays", "minutes"], ascending=False).head(25)
@@ -343,7 +439,9 @@ with tab4:
             tooltip=["track", "artist", "plays"]
         ).properties(height=400)
 
+        st.markdown('<div class="card">', unsafe_allow_html=True)
         st.altair_chart(base_chart(chart), use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------- Deep cuts ----------
 with tab5:
@@ -367,12 +465,6 @@ with tab5:
         "minutes_per_song", ascending=False
     ).head(25)
     st.dataframe(deep, use_container_width=True, hide_index=True)
-
-    st.markdown("#### Songs you briefly sampled")
-    sampled = song_stats.sort_values(
-        ["avg_minutes", "plays"], ascending=[True, False]
-    ).head(25)
-    st.dataframe(sampled, use_container_width=True, hide_index=True)
 
     st.markdown("#### Album listening")
     album_stats = (
@@ -408,10 +500,22 @@ with tab6:
 
         with st.expander(f"🎧 {int(year)}"):
             a, b, c, d = st.columns(4)
-            a.metric("Hours", f"{y['minutes'].sum()/60:,.1f}")
-            b.metric("Top artist", top_artist)
-            c.metric("Top song", top_song)
-            d.metric("Top album", top_album)
+            with a:
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric("Hours", f"{y['minutes'].sum()/60:,.1f}")
+                st.markdown('</div>', unsafe_allow_html=True)
+            with b:
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric("Top artist", top_artist)
+                st.markdown('</div>', unsafe_allow_html=True)
+            with c:
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric("Top song", top_song)
+                st.markdown('</div>', unsafe_allow_html=True)
+            with d:
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric("Top album", top_album)
+                st.markdown('</div>', unsafe_allow_html=True)
 
             ya = (
                 y.groupby("artist")["minutes"]
@@ -427,7 +531,9 @@ with tab6:
                 tooltip=["artist", "minutes"]
             ).properties(height=300)
 
+            st.markdown('<div class="card">', unsafe_allow_html=True)
             st.altair_chart(base_chart(chart), use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------- Download ----------
 st.divider()
