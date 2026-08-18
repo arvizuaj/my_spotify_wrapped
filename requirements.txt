@@ -1,5 +1,8 @@
-streamlit
-pandas
-altair
-sklearn
-
+streamlit>=1.32
+pandas>=2.0
+numpy>=1.24
+altair>=5.0.0
+vega_datasets
+scikit-learn>=1.3
+scipy
+requests
