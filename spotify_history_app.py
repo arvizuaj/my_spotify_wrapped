@@ -29,6 +29,7 @@ body {
     padding: 15px;
     border-radius: 12px;
     border: 1px solid #333333;
+    margin-bottom: 15px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -39,18 +40,19 @@ ACCENT_WARM = "#FF6D00"
 ACCENT_COOL = "#00B8D4"
 TEXT_LIGHT = "#F5F5F5"
 
-alt.themes.enable("default")
-
 def base_chart(chart):
-    return chart.configure_view(
-        strokeWidth=0
-    ).configure_axis(
-        labelColor=TEXT_LIGHT,
-        titleColor=TEXT_LIGHT,
-        gridColor="#444444"
-    ).configure_legend(
-        labelColor=TEXT_LIGHT,
-        titleColor=TEXT_LIGHT
+    return (
+        chart
+        .configure_view(strokeWidth=0)
+        .configure_axis(
+            labelColor=TEXT_LIGHT,
+            titleColor=TEXT_LIGHT,
+            gridColor="#444444"
+        )
+        .configure_legend(
+            labelColor=TEXT_LIGHT,
+            titleColor=TEXT_LIGHT
+        )
     )
 
 def flatten_record(x):
