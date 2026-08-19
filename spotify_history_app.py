@@ -506,7 +506,7 @@ with tab4:
     artist_stats["minutes_per_song"] = artist_stats["minutes"] / artist_stats["unique_songs"]
 
     # Sort by unique songs descending
-    deep = artist_stats.sort_values("unique_songs", descending=True).head(25)
+    deep = artist_stats.sort_values("unique_songs", ascending=False).head(25)
 
     # Deep Cuts Visual
     chart = alt.Chart(deep).mark_bar(color="#1DB954").encode(
