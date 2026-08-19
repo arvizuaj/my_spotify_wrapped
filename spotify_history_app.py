@@ -1,3 +1,5 @@
+#Chunk1
+
 import streamlit as st
 import pandas as pd
 import json
@@ -20,7 +22,6 @@ body {
     color: #FFFFFF;
 }
 
-/* Rounded card container */
 .card {
     background-color: rgba(0,0,0,0.55);
     padding: 20px;
@@ -29,7 +30,6 @@ body {
     margin-bottom: 25px;
 }
 
-/* KPI cards */
 .metric-card {
     background-color: rgba(0,0,0,0.55);
     padding: 15px;
@@ -38,7 +38,6 @@ body {
     margin-bottom: 15px;
 }
 
-/* Dataframe styling */
 .dataframe tbody tr {
     color: #FFFFFF;
 }
@@ -122,13 +121,15 @@ def load_files(files):
     return df, bad_files
 
 def top_table(df, col, n=10):
-    return (
+    t = (
         df.groupby(col, dropna=False)
           .agg(plays=("track", "size"), minutes=("minutes", "sum"))
           .sort_values(["minutes", "plays"], ascending=False)
           .head(n)
           .reset_index()
     )
+    t["minutes"] = t["minutes"].astype(int)
+    return t
 
 def heatmap(df, value_col, title, colors):
     chart = alt.Chart(df).mark_rect().encode(
@@ -151,10 +152,11 @@ def classify_deliberate_served(row):
     if rs in served_codes or re in served_codes or re in {"trackdone", "endplay"}:
         return "Served"
 
-    # Fallback heuristic for legacy/missing reasons
     if row["minutes"] < 0.5:
         return "Deliberate"
     return "Served"
+
+#Chunk2
 
 # ---------- Header ----------
 st.title("🎧 Spotify History Analyzer")
@@ -231,18 +233,17 @@ for col, label, value in [
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------- Tabs ----------
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
+tab1, tab3, tab4, tab6, tab7, tab9, tab10 = st.tabs([
     "🏆 Top Music",
-    "📈 Evolution",
     "⏰ When You Listen",
     "🔁 Replay & Habits",
-    "🎧 Deep Cuts",
     "📝 Yearly Wrapped",
     "🏃 Listening Marathons",
-    "🔍 Discovery vs Repetition",
     "🏆 Artist & Track Races",
     "❤️ Loyalty & Behavior",
 ])
+
+#Chunk3
 
 # ---------- Top Music ----------
 with tab1:
@@ -250,6 +251,9 @@ with tab1:
 
     col1, col2 = st.columns(2)
 
+    # -----------------------------
+    # Top Artists
+    # -----------------------------
     with col1:
         st.markdown("#### Top artists by listening time")
         artists_df = top_table(f, "artist", 15)
@@ -266,6 +270,9 @@ with tab1:
 
         st.dataframe(artists_df, use_container_width=True, hide_index=True)
 
+    # -----------------------------
+    # Top Songs
+    # -----------------------------
     with col2:
         st.markdown("#### Top songs by listening time")
         songs_df = top_table(f, "track", 15)
@@ -282,42 +289,82 @@ with tab1:
 
         st.dataframe(songs_df, use_container_width=True, hide_index=True)
 
-# ---------- Evolution ----------
-with tab2:
-    st.subheader("How your taste changed")
+    # -----------------------------
+    # All-Time Artist Race (Top 20)
+    # -----------------------------
+    st.markdown("### 🏆 All-Time Artist Race (Top 20)")
 
-    yearly = (
-        f.groupby("year")
-         .agg(hours=("minutes", lambda x: x.sum()/60))
-         .reset_index()
+    artist_daily = (
+        f.groupby(["date","artist"])["minutes"]
+        .sum()
+        .reset_index()
     )
+    artist_daily = artist_daily.sort_values(["artist","date"])
+    artist_daily["cum_hours"] = artist_daily.groupby("artist")["minutes"].cumsum() / 60
 
-    chart = alt.Chart(yearly).mark_area(
-        color=alt.Gradient(
-            gradient="linear",
-            stops=[
-                alt.GradientStop(color="#1DB954", offset=0),
-                alt.GradientStop(color="#1DB954AA", offset=1)
-            ],
-            x1=1, x2=1, y1=1, y2=0
-        )
-    ).encode(
-        x="year:O",
-        y="hours:Q",
-        tooltip=["year", "hours"]
-    ).properties(height=300)
+    top20_artists = (
+        artist_daily.groupby("artist")["cum_hours"]
+        .max()
+        .sort_values(ascending=False)
+        .head(20)
+        .index
+    )
+    artist_daily_top = artist_daily[artist_daily["artist"].isin(top20_artists)]
+
+    chart = alt.Chart(artist_daily_top).mark_line().encode(
+        x="date:T",
+        y="cum_hours:Q",
+        color="artist:N",
+        tooltip=["date","artist","cum_hours"]
+    ).properties(height=350)
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.altair_chart(base_chart(chart), use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-# ---------- When ----------
-with tab3:
-    st.subheader("When do you listen?")
+    # -----------------------------
+    # All-Time Track Race (Top 20)
+    # -----------------------------
+    st.markdown("### 🏆 All-Time Track Race (Top 20)")
 
+    track_daily = (
+        f.groupby(["date","track"])["minutes"]
+        .sum()
+        .reset_index()
+    )
+    track_daily = track_daily.sort_values(["track","date"])
+    track_daily["cum_hours"] = track_daily.groupby("track")["minutes"].cumsum() / 60
+
+    top20_tracks = (
+        track_daily.groupby("track")["cum_hours"]
+        .max()
+        .sort_values(ascending=False)
+        .head(20)
+        .index
+    )
+    track_daily_top = track_daily[track_daily["track"].isin(top20_tracks)]
+
+    chart = alt.Chart(track_daily_top).mark_line().encode(
+        x="date:T",
+        y="cum_hours:Q",
+        color="track:N",
+        tooltip=["date","track","cum_hours"]
+    ).properties(height=350)
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.altair_chart(base_chart(chart), use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+#Chunk4
+
+# ---------- When You Listen ----------
+with tab3:
+    st.subheader("⏰ When do you listen?")
+
+    # -----------------------------
+    # Hour of Day Listening
+    # -----------------------------
     hourly = f.groupby("hour")["minutes"].sum().reset_index()
-    weekday_order = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
-    weekday = f.groupby("weekday")["minutes"].sum().reindex(weekday_order).reset_index()
 
     chart = alt.Chart(hourly).mark_bar(color=ACCENT_COOL).encode(
         x="hour:O",
@@ -329,6 +376,12 @@ with tab3:
     st.altair_chart(base_chart(chart), use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # -----------------------------
+    # Day of Week Listening
+    # -----------------------------
+    weekday_order = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+    weekday = f.groupby("weekday")["minutes"].sum().reindex(weekday_order).reset_index()
+
     chart = alt.Chart(weekday).mark_bar(color=ACCENT_WARM).encode(
         x=alt.X("weekday:N", sort=weekday_order),
         y="minutes:Q",
@@ -339,23 +392,70 @@ with tab3:
     st.altair_chart(base_chart(chart), use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # -----------------------------
+    # Evolution Area Chart (Moved Here)
+    # -----------------------------
+    st.markdown("### 📈 Listening Time by Year")
+
+    yearly = (
+        f.groupby("year")
+         .agg(hours=("minutes", lambda x: x.sum()/60))
+         .reset_index()
+    )
+
+    chart = alt.Chart(yearly).mark_area(
+        opacity=0.35,
+        color="#1DB954"
+    ).encode(
+        x="year:O",
+        y="hours:Q",
+        tooltip=["year","hours"]
+    ).properties(height=300)
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.altair_chart(base_chart(chart), use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # -----------------------------
+    # Listening Intensity Heatmap
+    # -----------------------------
     heat_df = f.groupby(["weekday","hour"])["minutes"].sum().reset_index()
-    session_df = f.groupby(["weekday","hour"])["track"].count().reset_index().rename(columns={"track":"plays"})
 
     st.markdown("#### Listening intensity heatmap")
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.altair_chart(heatmap(heat_df, "minutes", "Listening Intensity", "greens"), use_container_width=True)
+    st.altair_chart(
+        heatmap(heat_df, "minutes", "Listening Intensity", "greens"),
+        use_container_width=True
+    )
     st.markdown('</div>', unsafe_allow_html=True)
+
+    # -----------------------------
+    # Session Stamina Heatmap
+    # -----------------------------
+    session_df = (
+        f.groupby(["weekday","hour"])["track"]
+        .count()
+        .reset_index()
+        .rename(columns={"track":"plays"})
+    )
 
     st.markdown("#### Session stamina heatmap")
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.altair_chart(heatmap(session_df, "plays", "Session Stamina", "oranges"), use_container_width=True)
+    st.altair_chart(
+        heatmap(session_df, "plays", "Session Stamina", "oranges"),
+        use_container_width=True
+    )
     st.markdown('</div>', unsafe_allow_html=True)
 
-# ---------- Replay / habits ----------
+#Chunk5
+
+# ---------- Replay & Habits ----------
 with tab4:
     st.subheader("🔁 Replay & listening personality")
 
+    # -----------------------------
+    # Song-level replay stats
+    # -----------------------------
     song_stats = (
         f.groupby(["track","artist"])
          .agg(
@@ -368,6 +468,7 @@ with tab4:
     )
     song_stats["skip_rate"] = song_stats["skips"] / song_stats["plays"]
 
+    # Replay KPIs
     c1, c2, c3 = st.columns(3)
     for col, label, value in [
         (c1, "Avg. play length", f"{f['minutes'].mean():.2f} min"),
@@ -379,13 +480,19 @@ with tab4:
             st.metric(label, value)
             st.markdown('</div>', unsafe_allow_html=True)
 
+    # -----------------------------
+    # Replay Table
+    # -----------------------------
     st.markdown("#### Your most replayed songs")
+
     replay = song_stats.sort_values(["plays","minutes"], ascending=False).head(25)
+
     st.dataframe(replay, use_container_width=True, hide_index=True)
 
-# ---------- Deep cuts ----------
-with tab5:
-    st.subheader("🎧 Deep cuts & hidden patterns")
+    # -----------------------------
+    # Deep Cuts (moved from old tab)
+    # -----------------------------
+    st.markdown("### 🎧 Deep Cuts — Artists You Go Deep On")
 
     artist_stats = (
         f.groupby("artist")
@@ -398,103 +505,264 @@ with tab5:
     )
     artist_stats["minutes_per_song"] = artist_stats["minutes"] / artist_stats["unique_songs"]
 
-    st.markdown("#### Artists you go deep on")
-    deep = artist_stats[artist_stats["plays"] >= 5].sort_values("minutes_per_song", ascending=False).head(25)
+    # Sort by unique songs descending
+    deep = artist_stats.sort_values("unique_songs", descending=True).head(25)
+
+    # Deep Cuts Visual
+    chart = alt.Chart(deep).mark_bar(color="#1DB954").encode(
+        x="unique_songs:Q",
+        y=alt.Y("artist:N", sort="-x"),
+        tooltip=["artist","unique_songs","minutes"]
+    ).properties(height=350)
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.altair_chart(base_chart(chart), use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Deep Cuts Table
     st.dataframe(deep, use_container_width=True, hide_index=True)
 
-# ---------- Wrapped ----------
+#Chunk6a
+
+# ---------- Yearly Wrapped ----------
 with tab6:
     st.subheader("📝 Your yearly Spotify Wrapped")
 
+    # Loop through each year in descending order
     for year in sorted(f["year"].dropna().unique(), reverse=True):
         y = f[f["year"] == year]
         if y.empty:
             continue
 
+        # Top artist, song, album for the year
         top_artist = y.groupby("artist")["minutes"].sum().idxmax()
         top_song = y.groupby("track")["minutes"].sum().idxmax()
         top_album = y.groupby("album")["minutes"].sum().idxmax()
 
-        with st.expander(f"🎧 {int(year)}"):
-            a, b, c, d = st.columns(4)
-            for col, label, value in [
-                (a, "Hours", f"{y['minutes'].sum()/60:,.1f}"),
-                (b, "Top artist", top_artist),
-                (c, "Top song", top_song),
-                (d, "Top album", top_album),
-            ]:
-                with col:
-                    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-                    st.metric(label, value)
-                    st.markdown('</div>', unsafe_allow_html=True)
+        # Build visuals (will be added in CHUNK 6B)
+        # top_artists_year
+        # top_songs_year
+        # daily_year
 
+        with st.expander(f"🎧 {int(year)}"):
+            # Metrics row
+            a, b, c, d = st.columns(4)
+
+            with a:
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric("Hours", f"{y['minutes'].sum()/60:,.1f}")
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            with b:
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric("Top artist", top_artist)
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            with c:
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric("Top song", top_song)
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            with d:
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.metric("Top album", top_album)
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            # Visuals will be inserted in CHUNK 6B
+            v1, v2, v3 = st.columns(3)
+
+#Chunk6B
+
+        # -----------------------------
+        # Build visuals for this year
+        # -----------------------------
+
+        # Top Artists (Year)
+        top_artists_year = (
+            y.groupby("artist")["minutes"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(10)
+            .reset_index()
+        )
+
+        artist_chart = alt.Chart(top_artists_year).mark_bar(color=PRIMARY).encode(
+            x="minutes:Q",
+            y=alt.Y("artist:N", sort="-x"),
+            tooltip=["artist", "minutes"]
+        ).properties(height=250)
+
+        # Top Songs (Year)
+        top_songs_year = (
+            y.groupby("track")["minutes"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(10)
+            .reset_index()
+        )
+
+        song_chart = alt.Chart(top_songs_year).mark_bar(color=SECONDARY).encode(
+            x="minutes:Q",
+            y=alt.Y("track:N", sort="-x"),
+            tooltip=["track", "minutes"]
+        ).properties(height=250)
+
+        # Daily Listening Trend (Year)
+        daily_year = (
+            y.groupby("date")["minutes"]
+            .sum()
+            .reset_index()
+        )
+
+        trend_chart = alt.Chart(daily_year).mark_line(color=ACCENT_COOL).encode(
+            x="date:T",
+            y="minutes:Q",
+            tooltip=["date", "minutes"]
+        ).properties(height=250)
+
+        # -----------------------------
+        # Insert visuals into expander
+        # -----------------------------
+        with v1:
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.markdown("#### Top Artists")
+            st.altair_chart(base_chart(artist_chart), use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        with v2:
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.markdown("#### Top Songs")
+            st.altair_chart(base_chart(song_chart), use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        with v3:
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.markdown("#### Daily Listening Trend")
+            st.altair_chart(base_chart(trend_chart), use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+#Chunk6C
+        # End of expander for this year
+        # (No additional visuals needed here)
+
+    # End of Yearly Wrapped tab
+
+#Chunk7
 # ---------- Listening Marathons ----------
 with tab7:
     st.subheader("🏃 Listening Marathons")
 
+    # Sort by timestamp
     f_sorted = f.sort_values("timestamp")
+
+    # Gap between plays
     f_sorted["gap"] = f_sorted["timestamp"].diff().dt.total_seconds().fillna(0)
+
+    # New session if gap > 30 minutes
     f_sorted["new_session"] = f_sorted["gap"] > (30 * 60)
     f_sorted["session_id"] = f_sorted["new_session"].cumsum()
 
+    # Build sessions
     sessions = (
         f_sorted.groupby("session_id")
         .agg(
             start=("timestamp","min"),
             end=("timestamp","max"),
-            duration=("minutes","sum"),
+            duration_minutes=("minutes","sum"),
             tracks=("track","size"),
             skips=("skipped","sum"),
         )
         .reset_index()
     )
 
-    sessions["mood"] = np.where(sessions["skips"] / sessions["tracks"] < 0.1, "In the Zone", "Chaotic")
+    # Convert duration to hours
+    sessions["duration_hours"] = sessions["duration_minutes"] / 60
+
+    # Top artist per session
+    top_artist_per_session = (
+        f_sorted.groupby(["session_id","artist"])["track"]
+        .count()
+        .reset_index()
+        .sort_values(["session_id","track"], ascending=[True,False])
+        .groupby("session_id")
+        .first()
+        .reset_index()
+        .rename(columns={"artist":"top_artist","track":"artist_plays"})
+    )
+
+    # Top track per session
+    top_track_per_session = (
+        f_sorted.groupby(["session_id","track"])["track"]
+        .count()
+        .reset_index(name="plays")
+        .sort_values(["session_id","plays"], ascending=[True,False])
+        .groupby("session_id")
+        .first()
+        .reset_index()
+        .rename(columns={"track":"top_track","plays":"track_plays"})
+    )
+
+    # Merge into sessions table
+    sessions = sessions.merge(top_artist_per_session, on="session_id", how="left")
+    sessions = sessions.merge(top_track_per_session, on="session_id", how="left")
+
+    # Mood classification
+    sessions["mood"] = np.where(
+        sessions["skips"] / sessions["tracks"] < 0.1,
+        "In the Zone",
+        "Chaotic"
+    )
+
+    # -----------------------------
+    # Marathon Duration Visual
+    # -----------------------------
+    st.markdown("### ⏱️ Your Longest Listening Marathons")
+
+    duration_chart = alt.Chart(
+        sessions.sort_values("duration_hours", ascending=False).head(20)
+    ).mark_bar(color=PRIMARY).encode(
+        x="duration_hours:Q",
+        y=alt.Y("session_id:N", sort="-x"),
+        tooltip=["session_id","duration_hours","tracks","top_artist","top_track"]
+    ).properties(height=350)
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.altair_chart(base_chart(duration_chart), use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # -----------------------------
+    # Marathon Table (Enhanced)
+    # -----------------------------
+    st.markdown("### 📋 Marathon Details")
+
+    marathon_table = sessions.sort_values("duration_hours", ascending=False).head(20)
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.dataframe(
-        sessions.sort_values("duration", ascending=False).head(20),
+        marathon_table[
+            [
+                "session_id",
+                "start",
+                "end",
+                "duration_hours",
+                "tracks",
+                "skips",
+                "mood",
+                "top_artist",
+                "top_track",
+            ]
+        ],
         use_container_width=True,
         hide_index=True
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
-# ---------- Discovery vs Repetition ----------
-with tab8:
-    st.subheader("🔍 Discovery vs Repetition")
-
-    f["is_new"] = ~f.duplicated("track")
-
-    daily = (
-        f.groupby("date")
-        .agg(
-            new=("is_new","sum"),
-            total=("track","size")
-        )
-        .reset_index()
-    )
-    daily["repeated"] = daily["total"] - daily["new"]
-
-    new_area = alt.Chart(daily).mark_area(opacity=0.7, color="#1DB954").encode(
-        x="date:T",
-        y="new:Q",
-        tooltip=["date","new"]
-    )
-    rep_area = alt.Chart(daily).mark_area(opacity=0.5, color="#3D5AFE").encode(
-        x="date:T",
-        y="repeated:Q",
-        tooltip=["date","repeated"]
-    )
-
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.altair_chart(base_chart(new_area + rep_area), use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
+#Chunk8
 # ---------- Artist & Track Races ----------
 with tab9:
     st.subheader("🏆 Artist & Track Races")
 
-    # Artist cumulative hours
+    # Artist Race (Cumulative Hours)
     artist_daily = (
         f.groupby(["date","artist"])["minutes"]
         .sum()
@@ -503,18 +771,28 @@ with tab9:
     artist_daily = artist_daily.sort_values(["artist","date"])
     artist_daily["cum_hours"] = artist_daily.groupby("artist")["minutes"].cumsum() / 60
 
-    artist_chart = alt.Chart(artist_daily).mark_line().encode(
+    top_artists = (
+        artist_daily.groupby("artist")["cum_hours"]
+        .max()
+        .sort_values(ascending=False)
+        .head(25)
+        .index
+    )
+    artist_daily_top = artist_daily[artist_daily["artist"].isin(top_artists)]
+
+    chart = alt.Chart(artist_daily_top).mark_line().encode(
         x="date:T",
         y="cum_hours:Q",
         color="artist:N",
         tooltip=["date","artist","cum_hours"]
-    ).properties(height=350, title="All-Time Artist Race")
+    ).properties(height=350)
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.altair_chart(base_chart(artist_chart), use_container_width=True)
+    st.markdown("### 🎨 Artist Race — Top 25")
+    st.altair_chart(base_chart(chart), use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Track cumulative hours
+    # Track Race (Cumulative Hours)
     track_daily = (
         f.groupby(["date","track"])["minutes"]
         .sum()
@@ -527,172 +805,124 @@ with tab9:
         track_daily.groupby("track")["cum_hours"]
         .max()
         .sort_values(ascending=False)
-        .head(10)
+        .head(25)
         .index
     )
     track_daily_top = track_daily[track_daily["track"].isin(top_tracks)]
 
-    track_chart = alt.Chart(track_daily_top).mark_line().encode(
+    chart = alt.Chart(track_daily_top).mark_line().encode(
         x="date:T",
         y="cum_hours:Q",
         color="track:N",
         tooltip=["date","track","cum_hours"]
-    ).properties(height=350, title="All-Time Track Race")
+    ).properties(height=350)
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.altair_chart(base_chart(track_chart), use_container_width=True)
+    st.markdown("### 🎶 Track Race — Top 25")
+    st.altair_chart(base_chart(chart), use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
+
 
 # ---------- Loyalty & Behavior ----------
 with tab10:
     st.subheader("❤️ Loyalty & Behavior")
 
-    # Artist loyalty (ride-or-die vs always skip)
-    artist_loyalty = (
+    # Ride-or-Die Artists (high minutes per unique song)
+    artist_stats = (
         f.groupby("artist")
-        .agg(
-            plays=("track","size"),
-            skips=("skipped","sum"),
-        )
-        .reset_index()
+         .agg(
+             minutes=("minutes","sum"),
+             unique_songs=("track","nunique"),
+             plays=("track","size"),
+         )
+         .reset_index()
     )
-    artist_loyalty["skip_rate"] = artist_loyalty["skips"] / artist_loyalty["plays"]
-    artist_loyalty["complete_rate"] = 1 - artist_loyalty["skip_rate"]
+    artist_stats["minutes_per_song"] = artist_stats["minutes"] / artist_stats["unique_songs"]
 
-    ride_or_die = artist_loyalty[artist_loyalty["plays"] >= 10].sort_values(
-        "complete_rate", ascending=False
-    ).head(10)
-    always_skip = artist_loyalty[artist_loyalty["plays"] >= 10].sort_values(
-        "skip_rate", ascending=False
-    ).head(10)
+    ride_or_die = artist_stats.sort_values("minutes_per_song", ascending=False).head(20)
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("#### Ride-or-Die Artists")
-        chart = alt.Chart(ride_or_die).mark_bar(color="#1DB954").encode(
-            x=alt.X("complete_rate:Q", title="Completion rate"),
-            y=alt.Y("artist:N", sort="-x"),
-            tooltip=["artist","plays","complete_rate"]
-        ).properties(height=300)
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.altair_chart(base_chart(chart), use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    with col2:
-        st.markdown("#### Artists You Always Skip")
-        chart = alt.Chart(always_skip).mark_bar(color="#FF6D00").encode(
-            x=alt.X("skip_rate:Q", title="Skip rate"),
-            y=alt.Y("artist:N", sort="-x"),
-            tooltip=["artist","plays","skip_rate"]
-        ).properties(height=300)
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.altair_chart(base_chart(chart), use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # Deliberate vs Served Plays (simplified + reason_start/end)
-    f["play_type"] = f.apply(classify_deliberate_served, axis=1)
-
-    deliberate_served = (
-        f.groupby(["artist","play_type"])["track"]
-        .size()
-        .reset_index(name="plays")
-    )
-
-    top_artists_ds = (
-        deliberate_served.groupby("artist")["plays"]
-        .sum()
-        .sort_values(ascending=False)
-        .head(10)
-        .index
-    )
-    deliberate_served_top = deliberate_served[deliberate_served["artist"].isin(top_artists_ds)]
-
-    chart = alt.Chart(deliberate_served_top).mark_bar().encode(
-        x=alt.X("plays:Q", title="Plays"),
+    chart = alt.Chart(ride_or_die).mark_bar(color=PRIMARY).encode(
+        x="minutes_per_song:Q",
         y=alt.Y("artist:N", sort="-x"),
-        color=alt.Color("play_type:N", scale=alt.Scale(domain=["Deliberate","Served"], range=["#1DB954","#FF6D00"])),
-        tooltip=["artist","play_type","plays"]
-    ).properties(height=350, title="Deliberate vs Served Plays")
+        tooltip=["artist","minutes_per_song","unique_songs","minutes"]
+    ).properties(height=350)
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("### 🔥 Ride-or-Die Artists")
+    st.altair_chart(base_chart(chart), use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.dataframe(ride_or_die, use_container_width=True, hide_index=True)
+
+    # Skip-heavy songs
+    skip_stats = (
+        f.groupby("track")
+         .agg(
+             plays=("track","size"),
+             skips=("skipped","sum"),
+             minutes=("minutes","sum"),
+         )
+         .reset_index()
+    )
+    skip_stats["skip_rate"] = skip_stats["skips"] / skip_stats["plays"]
+    skip_heavy = skip_stats[skip_stats["plays"] >= 5].sort_values("skip_rate", ascending=False).head(20)
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("### 🚫 Songs You Always Skip")
+    st.dataframe(skip_heavy, use_container_width=True, hide_index=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Deliberate vs Served
+    f["intent"] = f.apply(classify_deliberate_served, axis=1)
+    intent_counts = f["intent"].value_counts().reset_index()
+    intent_counts.columns = ["intent","count"]
+
+    chart = alt.Chart(intent_counts).mark_bar().encode(
+        x="intent:N",
+        y="count:Q",
+        color="intent:N",
+        tooltip=["intent","count"]
+    ).properties(height=300)
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("### 🎯 Deliberate vs Served Listening")
     st.altair_chart(base_chart(chart), use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
     # Album vs Track Listener
     album_stats = (
-        f.groupby(["artist","album"])
-        .agg(
-            tracks=("track","nunique"),
-            minutes=("minutes","sum"),
-        )
+        f.groupby("album")["track"]
+        .nunique()
         .reset_index()
+        .rename(columns={"track":"unique_tracks"})
     )
-    album_stats["tracks_per_album"] = album_stats["tracks"]
-
-    full_album = (
-        album_stats.groupby("artist")["tracks_per_album"]
-        .mean()
-        .reset_index()
-        .sort_values("tracks_per_album", ascending=False)
-        .head(10)
-    )
-
-    chart = alt.Chart(full_album).mark_bar(color="#1DB954").encode(
-        x=alt.X("tracks_per_album:Q", title="Avg tracks per album"),
-        y=alt.Y("artist:N", sort="-x"),
-        tooltip=["artist","tracks_per_album"]
-    ).properties(height=300, title="Album vs Track Listener (Full Album Artists)")
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.altair_chart(base_chart(chart), use_container_width=True)
+    st.markdown("### 💿 Album vs Track Listener")
+    st.dataframe(album_stats.sort_values("unique_tracks", ascending=False).head(20),
+                 use_container_width=True, hide_index=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Discovery Age Map (first play per artist)
-    first_artist = (
-        f.sort_values("timestamp")
-        .groupby("artist")["timestamp"]
-        .min()
-        .reset_index()
-    )
-    first_artist["year_discovered"] = first_artist["timestamp"].dt.year
 
-    discovery_counts = (
-        first_artist.groupby("year_discovered")["artist"]
-        .size()
-        .reset_index(name="artists")
-        .sort_values("year_discovered")
-    )
+# ---------- Download Section ----------
+st.header("📥 Export Your Data")
 
-    chart = alt.Chart(discovery_counts).mark_bar(color="#3D5AFE").encode(
-        x=alt.X("year_discovered:O", title="Year"),
-        y=alt.Y("artists:Q", title="Artists discovered"),
-        tooltip=["year_discovered","artists"]
-    ).properties(height=300, title="Discovery Age Map")
-
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.altair_chart(base_chart(chart), use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# ---------- Download ----------
-st.divider()
-st.subheader("📥 Export your analysis")
-
-summary = (
-    f.groupby(["artist","track","album"])
+song_summary = (
+    f.groupby(["track","artist"])
      .agg(
          plays=("track","size"),
          minutes=("minutes","sum"),
+         avg_minutes=("minutes","mean"),
+         skips=("skipped","sum"),
      )
      .reset_index()
-     .sort_values("minutes", ascending=False)
 )
 
-csv = summary.to_csv(index=False).encode("utf-8")
+csv = song_summary.to_csv(index=False).encode("utf-8")
+
 st.download_button(
-    "Download song-level summary CSV",
+    label="Download Song Summary CSV",
     data=csv,
-    file_name="spotify_analysis_summary.csv",
-    mime="text/csv"
+    file_name="spotify_song_summary.csv",
+    mime="text/csv",
 )
-
-st.caption("Privacy note: this app intentionally ignores the ip_addr field.")
