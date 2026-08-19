@@ -717,6 +717,9 @@ with tab7:
     # -----------------------------
     st.markdown("### ⏱️ Your Longest Listening Marathons")
 
+    # Convert start datetime → date only
+    sessions["start_date"] = sessions["start"].dt.date
+
     duration_chart = alt.Chart(
         sessions.sort_values("duration_hours", ascending=False).head(20)
     ).mark_bar(color=PRIMARY).encode(
@@ -764,9 +767,8 @@ with tab10:
     # ----------------------------------------
     # ARTISTS YOU ALWAYS SKIP (Aggregated)
     # ----------------------------------------
-    st.markdown("### 🚫 Artists You Always Skip")
 
-
+    st.markdown("### 🚫 Artists You Always Skip (High Play Count)")
 
     artist_skip_stats = (
         f.groupby("artist")
@@ -781,8 +783,11 @@ with tab10:
 
     artist_skip_stats["skip_rate"] = artist_skip_stats["skips"] / artist_skip_stats["plays"]
 
-    # Sort by raw skip count
-    artist_skip_stats = artist_skip_stats.sort_values("skips", ascending=False)
+    # Filter for meaningful play volume
+    artist_skip_stats = artist_skip_stats[artist_skip_stats["plays"] > 50]
+
+    # Sort by skip rate descending
+    artist_skip_stats = artist_skip_stats.sort_values("skip_rate", ascending=False)
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.dataframe(artist_skip_stats, use_container_width=True, hide_index=True)
