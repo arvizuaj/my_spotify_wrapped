@@ -233,13 +233,12 @@ for col, label, value in [
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------- Tabs ----------
-tab1, tab3, tab4, tab6, tab7, tab9, tab10 = st.tabs([
+tab1, tab3, tab4, tab6, tab7, tab10 = st.tabs([
     "🏆 Top Music",
     "⏰ When You Listen",
     "🔁 Replay & Habits",
     "📝 Yearly Wrapped",
     "🏃 Listening Marathons",
-    "🏆 Artist & Track Races",
     "❤️ Loyalty & Behavior",
 ])
 
@@ -722,7 +721,7 @@ with tab7:
         sessions.sort_values("duration_hours", ascending=False).head(20)
     ).mark_bar(color=PRIMARY).encode(
         x="duration_hours:Q",
-        y=alt.Y("session_id:N", sort="-x"),
+        y=alt.Y("start_date:N", sort="-x"),
         tooltip=["session_id","duration_hours","tracks","top_artist","top_track"]
     ).properties(height=350)
 
@@ -767,29 +766,28 @@ with tab10:
     # ----------------------------------------
     st.markdown("### 🚫 Artists You Always Skip")
 
+
+
     artist_skip_stats = (
         f.groupby("artist")
-         .agg(
-             plays=("track","size"),
-             skips=("skipped","sum"),
-             minutes=("minutes","sum"),
-             unique_tracks=("track","nunique"),
-         )
-         .reset_index()
+        .agg(
+            plays=("track","size"),
+            skips=("skipped","sum"),
+            minutes=("minutes","sum"),
+            unique_tracks=("track","nunique"),
+        )
+        .reset_index()
     )
 
     artist_skip_stats["skip_rate"] = artist_skip_stats["skips"] / artist_skip_stats["plays"]
 
-    # Only show artists with meaningful play counts
-    skip_heavy_artists = (
-        artist_skip_stats[artist_skip_stats["plays"] >= 10]
-        .sort_values("skip_rate", ascending=False)
-        .head(20)
-    )
+    # Sort by raw skip count
+    artist_skip_stats = artist_skip_stats.sort_values("skips", ascending=False)
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.dataframe(skip_heavy_artists, use_container_width=True, hide_index=True)
+    st.dataframe(artist_skip_stats, use_container_width=True, hide_index=True)
     st.markdown('</div>', unsafe_allow_html=True)
+
 
     # ----------------------------------------
     # DELIBERATE VS SERVED — STACKED COLUMN BY YEAR-MONTH
