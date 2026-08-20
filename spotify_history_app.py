@@ -444,7 +444,6 @@ with tab3:
     st.altair_chart(base_chart(chart), use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-
     # -----------------------------
     # Listening Intensity Heatmap (Hours)
     # -----------------------------
@@ -462,18 +461,12 @@ with tab3:
             alt.Chart(df)
             .mark_rect()
             .encode(
-                x=alt.X(
-                    "hour:O",
-                    axis=alt.Axis(labelAngle=0)   # horizontal labels
-                ),
+                x=alt.X("hour:O", axis=alt.Axis(labelAngle=0)),
                 y=alt.Y(
                     "weekday:N",
                     sort=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
                 ),
-                color=alt.Color(
-                    f"{value_col}:Q",
-                    scale=alt.Scale(scheme=color_scheme)
-                ),
+                color=alt.Color(f"{value_col}:Q", scale=alt.Scale(scheme=color_scheme)),
                 tooltip=["weekday", "hour", value_col]
             )
             .properties(height=300, title=title)
@@ -486,6 +479,7 @@ with tab3:
         use_container_width=True
     )
     st.markdown('</div>', unsafe_allow_html=True)
+
 
     # -----------------------------
     # Session Stamina Heatmap (Plays)
@@ -504,6 +498,7 @@ with tab3:
         use_container_width=True
     )
     st.markdown('</div>', unsafe_allow_html=True)
+
 
 
 #Chunk5
