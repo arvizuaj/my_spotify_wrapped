@@ -802,7 +802,7 @@ with tab7:
     # -----------------------------
     st.markdown("### ⏱️ Your Longest Listening Marathons")
 
-    # Convert start datetime → proper datetime (not .dt.date)
+    # Convert start datetime → proper datetime
     sessions["start_date"] = pd.to_datetime(sessions["start"])
 
     duration_chart = (
@@ -812,7 +812,7 @@ with tab7:
         .mark_bar(color=PRIMARY)
         .encode(
             x="duration_hours:Q",
-            y=alt.Y("start_date:T", sort="-x"),   # <-- temporal axis fixes weird labels
+            y=alt.Y("start_date:T", sort="-x"),
             tooltip=["session_id", "duration_hours", "tracks", "top_artist", "top_track"]
         )
         .properties(height=350)
@@ -821,6 +821,7 @@ with tab7:
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.altair_chart(base_chart(duration_chart), use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
+
 
 
     # -----------------------------
