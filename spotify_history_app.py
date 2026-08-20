@@ -285,7 +285,7 @@ with tab1:
     with col2:
         st.markdown("#### Top songs by listening time")
 
-        songs_df = top_table(f, "track", 15)   # now returns hours
+        songs_df = top_table(f, "track", 15).dropna(subset=["track"])
 
         chart = alt.Chart(songs_df).mark_bar(color=SECONDARY).encode(
             x="hours:Q",
@@ -298,6 +298,7 @@ with tab1:
         st.markdown('</div>', unsafe_allow_html=True)
 
         st.dataframe(songs_df, use_container_width=True, hide_index=True)
+
 
 
     # -----------------------------
@@ -322,7 +323,7 @@ with tab1:
     )
     artist_daily_top = artist_daily[artist_daily["artist"].isin(top15_artists)]
 
-    chart = alt.Chart(artist_daily_top).mark_line().encode(
+    chart= alt.Chart(artist_daily_top).mark_line().encode(
         x="date:T",
         y="cum_hours:Q",
         color="artist:N",
