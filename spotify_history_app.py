@@ -125,7 +125,7 @@ def top_table(df, col, n=10):
         df.groupby(col, dropna=False)
           .agg(
               plays=("track", "size"),
-              #minutes=("minutes", "sum")
+              minutes=("minutes", "sum")
           )
           .sort_values(["minutes", "plays"], ascending=False)
           .head(n)
