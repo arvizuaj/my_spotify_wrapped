@@ -272,6 +272,7 @@ with tab1:
         st.markdown("#### Top artists by listening time")
 
         artists_df = top_table(f, "artist", 15)   # now returns hours
+        artists_df["hours"] = artists_df["hours"].round(1)
         artists_df = artists_df.drop(columns=["minutes"])
 
         chart = alt.Chart(artists_df).mark_bar(color=PRIMARY).encode(
@@ -293,6 +294,7 @@ with tab1:
         st.markdown("#### Top songs by listening time")
 
         songs_df = top_table(f, "track", 15).dropna(subset=["track"])
+        songs_df["hours"] = songs_df["hours"].round(1)
         songs_df = songs_df.drop(columns=["minutes"])
 
         chart = alt.Chart(songs_df).mark_bar(color=SECONDARY).encode(
@@ -561,6 +563,7 @@ with tab4:
 
     # Convert minutes → hours
     replay["hours"] = replay["hours"] / 60
+    replay["hours"] = replay["hours"].round(1)
     #replay["avg_hours"] = replay["avg_hours"] / 60
 
     # Skip rate
@@ -588,6 +591,7 @@ with tab4:
 
     # Convert minutes → hours
     artist_stats["hours"] = artist_stats["hours"] / 60
+    artist_stats["hours"] = artist_stats["hours"].round(1)
 
     # Minutes per song → hours per song
     #artist_stats["hours_per_song"] = artist_stats["hours"] / artist_stats["unique_songs"]
@@ -765,6 +769,7 @@ with tab7:
 
     # Convert duration to hours
     sessions["duration_hours"] = sessions["duration_minutes"] / 60
+    sessions["duration_hours"] = sessions["duration_hours"].round(1)
 
     # Top artist per session
     top_artist_per_session = (
@@ -874,7 +879,7 @@ with tab10:
     )
 
     # Convert minutes → hours
-    skip_df["listening_hours"] = skip_df["hours"] / 60
+    skip_df["listening_hours"] = skip_df["listening_hours"] / 60
 
     # Skip rate
     skip_df["skip_rate"] = skip_df["skips"] / skip_df["plays"]
