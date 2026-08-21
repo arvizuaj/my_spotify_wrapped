@@ -272,6 +272,7 @@ with tab1:
         st.markdown("#### Top artists by listening time")
 
         artists_df = top_table(f, "artist", 15)   # now returns hours
+        artists_df = artists_df.drop(columns=["minutes"])
 
         chart = alt.Chart(artists_df).mark_bar(color=PRIMARY).encode(
             x="hours:Q",
@@ -292,6 +293,7 @@ with tab1:
         st.markdown("#### Top songs by listening time")
 
         songs_df = top_table(f, "track", 15).dropna(subset=["track"])
+        songs_df = songs_df.drop(columns=["minutes"])
 
         chart = alt.Chart(songs_df).mark_bar(color=SECONDARY).encode(
             x="hours:Q",
@@ -551,6 +553,7 @@ with tab4:
         .agg(
              plays=("track","size"),
              hours=("minutes","sum"),
+             avg_hours=("minutes","mean"),
              skips=("skipped","sum"),
         )
         .reset_index()
@@ -584,10 +587,10 @@ with tab4:
     )
 
     # Convert minutes → hours
-    #artist_stats["hours"] = artist_stats["hours"] / 60
+    artist_stats["hours"] = artist_stats["hours"] / 60
 
     # Minutes per song → hours per song
-    #artist_stats["hours_per_song"] = artist_stats["hours"] / artist_stats["unique_songs"]
+    artist_stats["hours_per_song"] = artist_stats["hours"] / artist_stats["unique_songs"]
 
     # Sort by unique songs descending
     deep = artist_stats.sort_values("unique_songs", ascending=False).head(25)
@@ -864,14 +867,14 @@ with tab10:
         f.groupby("artist")
         .agg(
             plays=("track","size"),
-            #hours=("minutes","sum"),
+            hours=("minutes","sum"),
             skips=("skipped","sum")
         )
         .reset_index()
     )
 
     # Convert minutes → hours
-    #skip_df["hours"] = skip_df["hours"] / 60
+    skip_df["hours"] = skip_df["hours"] / 60
 
     # Skip rate
     skip_df["skip_rate"] = skip_df["skips"] / skip_df["plays"]
