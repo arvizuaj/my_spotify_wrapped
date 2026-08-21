@@ -553,7 +553,7 @@ with tab4:
         .agg(
              plays=("track","size"),
              hours=("minutes","sum"),
-             avg_hours=("minutes","mean"),
+             #avg_hours=("minutes","mean"),
              skips=("skipped","sum"),
         )
         .reset_index()
@@ -561,7 +561,7 @@ with tab4:
 
     # Convert minutes → hours
     replay["hours"] = replay["hours"] / 60
-    replay["avg_hours"] = replay["avg_hours"] / 60
+    #replay["avg_hours"] = replay["avg_hours"] / 60
 
     # Skip rate
     replay["skip_rate"] = replay["skips"] / replay["plays"]
@@ -590,7 +590,7 @@ with tab4:
     artist_stats["hours"] = artist_stats["hours"] / 60
 
     # Minutes per song → hours per song
-    artist_stats["hours_per_song"] = artist_stats["hours"] / artist_stats["unique_songs"]
+    #artist_stats["hours_per_song"] = artist_stats["hours"] / artist_stats["unique_songs"]
 
     # Sort by unique songs descending
     deep = artist_stats.sort_values("unique_songs", ascending=False).head(25)
@@ -867,14 +867,14 @@ with tab10:
         f.groupby("artist")
         .agg(
             plays=("track","size"),
-            hours=("minutes","sum"),
+            listening_hours=("minutes","sum"),
             skips=("skipped","sum")
         )
         .reset_index()
     )
 
     # Convert minutes → hours
-    skip_df["hours"] = skip_df["hours"] / 60
+    skip_df["listening_hours"] = skip_df["hours"] / 60
 
     # Skip rate
     skip_df["skip_rate"] = skip_df["skips"] / skip_df["plays"]
