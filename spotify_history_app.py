@@ -585,7 +585,7 @@ with tab4:
         alt.Chart(year_counts)
         .mark_bar(color=PRIMARY)
         .encode(
-            x=alt.X("year:O", title="Year"),
+            x=alt.X("year:O", title="Year",axis=alt.Axis(labelAngle=0)),
             y=alt.Y("songs:Q", title="Songs Discovered"),
             tooltip=["year", "songs"]
         )
@@ -900,16 +900,21 @@ with tab7:
         ]
     ]
 
-    # Add data bars to duration_hours
+    # --- OPTION A: Data bars ---
     styled_table = marathon_table.style.bar(
         subset=["duration_hours"],
         color="#4CAF50"   # green
     )
 
+    # --- OPTION B: Green gradient (comment A out, uncomment B if preferred) ---
+    # styled_table = marathon_table.style.background_gradient(
+    #     subset=["duration_hours"],
+    #     cmap="Greens"
+    # )
+
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.dataframe(styled_table, use_container_width=True, hide_index=True)
     st.markdown('</div>', unsafe_allow_html=True)
-
 
 
 #Chunk8
