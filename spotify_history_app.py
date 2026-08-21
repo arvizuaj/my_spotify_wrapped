@@ -123,12 +123,18 @@ def load_files(files):
 def top_table(df, col, n=10):
     t = (
         df.groupby(col, dropna=False)
-          .agg(plays=("track", "size"), minutes=("minutes", "sum"))
+          .agg(
+              plays=("track", "size"),
+              minutes=("minutes", "sum")
+          )
           .sort_values(["minutes", "plays"], ascending=False)
           .head(n)
           .reset_index()
     )
-    t["minutes"] = t["minutes"].astype(int)
+
+    # Convert minutes → hours
+    t["hours"] = t["minutes"] / 60
+
     return t
 
 def heatmap(df, value_col, title, colors):
