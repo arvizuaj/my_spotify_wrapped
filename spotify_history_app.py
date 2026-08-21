@@ -767,6 +767,9 @@ with tab7:
         .reset_index()
     )
 
+
+    # Convert timestamps → proper datetime
+    sessions["start_date"] = pd.to_datetime(sessions["start"])
     # Convert duration to hours
     sessions["duration_hours"] = sessions["duration_minutes"] / 60
     sessions["duration_hours"] = sessions["duration_hours"].round(1)
