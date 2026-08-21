@@ -558,7 +558,7 @@ with tab4:
             plays=("track", "size"),
             minutes=("minutes", "sum"),
             skips=("skipped", "sum"),
-            first_play=("ts", "min")   # <-- FIXED: use your real timestamp column
+            first_play=("endTime", "min")   # <-- FIXED: correct timestamp column
         )
         .reset_index()
     )
@@ -608,6 +608,7 @@ with tab4:
     for year in sorted(class_groups.keys()):
         st.markdown(f"#### Class of {year}")
         st.write(", ".join(class_groups[year]))
+
 
 
     # -----------------------------
