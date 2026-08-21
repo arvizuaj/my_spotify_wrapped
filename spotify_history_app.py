@@ -546,33 +546,70 @@ with tab4:
             st.markdown('</div>', unsafe_allow_html=True)
 
     # -----------------------------
-    # Replay Table (Hours)
     # -----------------------------
-    st.markdown("#### Your most replayed songs")
+    # Replay Discovery Map
+    # -----------------------------
+    st.markdown("### 🎓 Replay Discovery Map")
+    st.markdown("When did your most replayed songs first enter your life?")
 
-    replay = (
-        f.groupby(["track","artist"])
+    # --- Build replay stats ---
+    replay_stats = (
+        f.groupby(["track", "artist"])
         .agg(
-             plays=("track","size"),
-             hours=("minutes","sum"),
-             #avg_hours=("minutes","mean"),
-             skips=("skipped","sum"),
+            plays=("track", "size"),
+            minutes=("minutes", "sum"),
+            skips=("skipped", "sum"),
+            first_play=("start", "min")
         )
         .reset_index()
     )
 
     # Convert minutes → hours
-    replay["hours"] = replay["hours"] / 60
-    replay["hours"] = replay["hours"].round(1)
-    #replay["avg_hours"] = replay["avg_hours"] / 60
+    replay_stats["hours"] = replay_stats["minutes"] / 60
+    replay_stats["hours"] = replay_stats["hours"].round(1)
 
-    # Skip rate
-    replay["skip_rate"] = replay["skips"] / replay["plays"]
+    # Extract first-play year
+    replay_stats["year"] = pd.to_datetime(replay_stats["first_play"]).dt.year
 
-    # Sort by plays + hours
-    replay = replay.sort_values(["plays","hours"], ascending=False).head(25)
+    # Top 50 replayed songs
+    top_replay = replay_stats.sort_values("plays", ascending=False).head(50)
 
-    st.dataframe(replay, use_container_width=True, hide_index=True)
+    # --- Build year counts for chart ---
+    year_counts = (
+        top_replay.groupby("year")
+                .size()
+                .reset_index(name="songs")
+    )
+
+    # --- Chart ---
+    chart = (
+        alt.Chart(year_counts)
+        .mark_bar(color=PRIMARY)
+        .encode(
+            x=alt.X("year:O", title="Year"),
+            y=alt.Y("songs:Q", title="Songs Discovered"),
+            tooltip=["year", "songs"]
+        )
+        .properties(height=300)
+    )
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.altair_chart(base_chart(chart), use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # --- Class of YEAR lists ---
+    st.markdown("### 🎶 Replay Class Groups")
+
+    class_groups = (
+        top_replay.groupby("year")
+                .apply(lambda df: df["track"].tolist())
+                .to_dict()
+    )
+
+    for year in sorted(class_groups.keys()):
+        st.markdown(f"#### Class of {year}")
+        st.write(", ".join(class_groups[year]))
+
 
     # -----------------------------
     # Deep Cuts — Artists You Go Deep On (Hours)
@@ -824,44 +861,44 @@ with tab7:
         .mark_bar(color=PRIMARY)
         .encode(
             x="duration_hours:Q",
-            y=alt.Y("start_date:T", sort="-x"),
+            y=alt.Y("start_date:T", sort="-x", title="Date"),   # <-- FIXED
             tooltip=["session_id", "duration_hours", "tracks", "top_artist", "top_track"]
         )
         .properties(height=350)
     )
 
+
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.altair_chart(base_chart(duration_chart), use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
-
-
 
     # -----------------------------
     # Marathon Table (Enhanced)
     # -----------------------------
     st.markdown("### 📋 Marathon Details")
 
-    marathon_table = sessions.sort_values("duration_hours", ascending=False).head(20)
+    # Sort + select top 20
+    marathon_table = sessions.sort_values("duration_hours", ascending=False).head(20).copy()
+
+    # Convert start → date only
+    marathon_table["start"] = pd.to_datetime(marathon_table["start"]).dt.date
+
+    # Remove unwanted columns
+    marathon_table = marathon_table.drop(columns=["session_id", "end"], errors="ignore")
+
+    # Round duration hours
+    marathon_table["duration_hours"] = marathon_table["duration_hours"].round(1)
+
+    # Add data bars to duration_hours
+    styled_table = marathon_table.style.bar(
+        subset=["duration_hours"],
+        color="#4CAF50"
+    )
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.dataframe(
-        marathon_table[
-            [
-                "session_id",
-                "start",
-                "end",
-                "duration_hours",
-                "tracks",
-                "skips",
-                "mood",
-                "top_artist",
-                "top_track",
-            ]
-        ],
-        use_container_width=True,
-        hide_index=True
-    )
+    st.dataframe(styled_table, use_container_width=True, hide_index=True)
     st.markdown('</div>', unsafe_allow_html=True)
+
 
 #Chunk8
 # ---------- Loyalty & Behavior ----------
@@ -890,8 +927,13 @@ with tab10:
     # Filter for artists with > 50 plays
     skip_df = skip_df[skip_df["plays"] > 50]
 
+    # Filter for artists with > 50 plays
+    skip_df = skip_df[skip_df["listening_hours"] > 1.5]
+
     # Sort by skip rate descending
-    skip_df = skip_df.sort_values("skip_rate", ascending=False).head(25)
+    skip_df = skip_df.sort_values("skip_rate", ascending=False).head(50)
+
+    skip_df = skip_df.sort_values("skip_rate", ascending=False)
 
     st.markdown("#### Artists you always skip")
     st.dataframe(skip_df, use_container_width=True, hide_index=True)
