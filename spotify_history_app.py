@@ -546,7 +546,6 @@ with tab4:
             st.markdown('</div>', unsafe_allow_html=True)
 
     # -----------------------------
-    # -----------------------------
     # Replay Discovery Map
     # -----------------------------
     st.markdown("### 🎓 Replay Discovery Map")
@@ -559,7 +558,7 @@ with tab4:
             plays=("track", "size"),
             minutes=("minutes", "sum"),
             skips=("skipped", "sum"),
-            first_play=("start", "min")
+            first_play=("ts", "min")   # <-- FIXED: use your real timestamp column
         )
         .reset_index()
     )
