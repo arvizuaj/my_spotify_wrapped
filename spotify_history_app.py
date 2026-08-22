@@ -571,7 +571,7 @@ with tab4:
     replay_stats["year"] = pd.to_datetime(replay_stats["first_play"]).dt.year
 
     # Top 75 replayed songs
-    top_replay = replay_stats.sort_values("plays", ascending=False).head(75)
+    top_replay = replay_stats.sort_values("plays", ascending=False).head(100)
 
     # --- Build year counts for chart ---
     year_counts = (
@@ -852,8 +852,9 @@ with tab7:
     # -----------------------------
     st.markdown("### ⏱️ Your Longest Listening Marathons")
 
-    # Convert start datetime → proper datetime (strip timezone)
-    sessions["start_date"] = pd.to_datetime(sessions["start"]).dt.tz_localize(None)
+    # Convert start → proper datetime AND strip timezone
+    sessions["start"] = pd.to_datetime(sessions["start"]).dt.tz_localize(None)
+    sessions["start_date"] = sessions["start"]
 
     duration_chart = (
         alt.Chart(
@@ -900,27 +901,58 @@ with tab7:
         ]
     ]
 
-    # --- OPTION A: Data bars ---
+    # Apply data bars AFTER selecting columns
     styled_table = marathon_table.style.bar(
         subset=["duration_hours"],
-        color="#4CAF50"   # green
+        color="#4CAF50"
     )
-
-    # --- OPTION B: Green gradient (comment A out, uncomment B if preferred) ---
-    # styled_table = marathon_table.style.background_gradient(
-    #     subset=["duration_hours"],
-    #     cmap="Greens"
-    # )
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.dataframe(styled_table, use_container_width=True, hide_index=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 
+
 #Chunk8
 # ---------- Loyalty & Behavior ----------
 with tab10:
     st.subheader("❤️ Loyalty & Behavior")
+
+
+    # -----------------------------
+    # Songs You Always Skip — Scatter Plot
+    # -----------------------------
+    st.markdown("### 🚫 Songs You Always Skip")
+    st.markdown("Relationship between skip percentage and total skips.")
+
+    # Build skip dataset
+    skip_df = (
+        f.groupby(["track", "artist"])
+        .agg(
+            plays=("track", "size"),
+            skips=("skipped", "sum")
+        )
+        .reset_index()
+    )
+
+    skip_df["skip_rate"] = skip_df["skips"] / skip_df["plays"]
+
+    # Scatter plot
+    skip_scatter = (
+        alt.Chart(skip_df)
+        .mark_circle(size=80, color=PRIMARY)
+        .encode(
+            x=alt.X("skip_rate:Q", title="Skip Percentage"),
+            y=alt.Y("skips:Q", title="Skip Count"),
+            tooltip=["track", "artist", "plays", "skips", "skip_rate"]
+        )
+        .properties(height=350)
+    )
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.altair_chart(base_chart(skip_scatter), use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
 
     # -----------------------------
     # Artists You Always Skip (Hours) — plays > 50
@@ -948,11 +980,11 @@ with tab10:
     skip_df = skip_df[skip_df["listening_hours"] > 1.5]
 
     # Sort by skip rate descending
-    skip_df = skip_df.sort_values("skip_rate", ascending=False).head(100)
+    skip_df = skip_df.sort_values("skip_rate", ascending=False).head(150)
 
     skip_df = skip_df.sort_values("skip_rate", ascending=False)
 
-    st.markdown("#### Artists you always skip")
+    #st.markdown("#### Artists you always skip")
     st.dataframe(skip_df, use_container_width=True, hide_index=True)
 
     # ----------------------------------------
