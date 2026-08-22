@@ -848,13 +848,12 @@ with tab7:
     )
 
     # -----------------------------
-    # Marathon Duration Visual
+    # Marathon Duration Visual (Restored)
     # -----------------------------
     st.markdown("### ⏱️ Your Longest Listening Marathons")
 
-    # Convert start → proper datetime AND strip timezone
-    sessions["start"] = pd.to_datetime(sessions["start"]).dt.tz_localize(None)
-    sessions["start_date"] = sessions["start"]
+    # Convert start to date string (stable for Altair)
+    sessions["start_date"] = pd.to_datetime(sessions["start"]).dt.strftime("%Y-%m-%d")
 
     duration_chart = (
         alt.Chart(
@@ -863,7 +862,7 @@ with tab7:
         .mark_bar(color=PRIMARY)
         .encode(
             x="duration_hours:Q",
-            y=alt.Y("start_date:T", sort="-x", title="Date"),
+            y=alt.Y("start_date:N", sort="-x", title="Date"),  # treat as nominal
             tooltip=["session_id", "duration_hours", "tracks", "top_artist", "top_track"]
         )
         .properties(height=350)
@@ -875,11 +874,10 @@ with tab7:
 
 
     # -----------------------------
-    # Marathon Table (Enhanced)
+    # Marathon Table (Restored)
     # -----------------------------
     st.markdown("### 📋 Marathon Details")
 
-    # Sort + select top 20
     marathon_table = sessions.sort_values("duration_hours", ascending=False).head(20).copy()
 
     # Convert start → date only
@@ -894,22 +892,17 @@ with tab7:
             "start",
             "duration_hours",
             "tracks",
-            "mood",
             "skips",
+            "mood",
             "top_artist",
             "top_track",
         ]
     ]
 
-    # Apply data bars AFTER selecting columns
-    styled_table = marathon_table.style.bar(
-        subset=["duration_hours"],
-        color="#4CAF50"
-    )
-
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.dataframe(styled_table, use_container_width=True, hide_index=True)
+    st.dataframe(marathon_table, use_container_width=True, hide_index=True)
     st.markdown('</div>', unsafe_allow_html=True)
+
 
 
 
@@ -920,14 +913,14 @@ with tab10:
 
 
     # -----------------------------
-    # Songs You Always Skip — Scatter Plot
+    # Songs You Always Skip — Artist Scatter Plot
     # -----------------------------
-    st.markdown("### 🚫 Songs You Always Skip")
-    st.markdown("Relationship between skip percentage and total skips.")
+    st.markdown("### 🚫 Artists You Always Skip")
+    st.markdown("Skip percentage vs total skips, aggregated by artist.")
 
-    # Build skip dataset
-    skip_df = (
-        f.groupby(["track", "artist"])
+    # Build artist-level skip dataset
+    artist_skip = (
+        f.groupby("artist")
         .agg(
             plays=("track", "size"),
             skips=("skipped", "sum")
@@ -935,16 +928,16 @@ with tab10:
         .reset_index()
     )
 
-    skip_df["skip_rate"] = skip_df["skips"] / skip_df["plays"]
+    artist_skip["skip_rate"] = artist_skip["skips"] / artist_skip["plays"]
 
     # Scatter plot
     skip_scatter = (
-        alt.Chart(skip_df)
-        .mark_circle(size=80, color=PRIMARY)
+        alt.Chart(artist_skip)
+        .mark_circle(size=90, color=PRIMARY)
         .encode(
             x=alt.X("skip_rate:Q", title="Skip Percentage"),
-            y=alt.Y("skips:Q", title="Skip Count"),
-            tooltip=["track", "artist", "plays", "skips", "skip_rate"]
+            y=alt.Y("skips:Q", title="Total Skips"),
+            tooltip=["artist", "plays", "skips", "skip_rate"]
         )
         .properties(height=350)
     )
@@ -977,7 +970,7 @@ with tab10:
     skip_df = skip_df[skip_df["plays"] > 50]
 
     # Filter for artists with > 50 plays
-    skip_df = skip_df[skip_df["listening_hours"] > 1.5]
+    skip_df = skip_df[skip_df["listening_hours"] > 2.0]
 
     # Sort by skip rate descending
     skip_df = skip_df.sort_values("skip_rate", ascending=False).head(150)
