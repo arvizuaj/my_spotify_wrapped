@@ -225,6 +225,8 @@ if f.empty:
     st.warning("No listening events match your filters.")
     st.stop()
 
+f.to_pickle("andrew_processed.pkl")
+
 # ---------- Overview ----------
 st.header("🎵 Your Music DNA")
 
@@ -571,7 +573,7 @@ with tab4:
     replay_stats["year"] = pd.to_datetime(replay_stats["first_play"]).dt.year
 
     # Top 75 replayed songs
-    top_replay = replay_stats.sort_values("plays", ascending=False).head(100)
+    top_replay = replay_stats.sort_values("plays", ascending=False).head(75)
 
     # --- Build year counts for chart ---
     year_counts = (
@@ -928,6 +930,9 @@ with tab10:
         .reset_index()
     )
 
+
+    # Filter out artists with fewer than 50 plays
+    artist_skip = artist_skip[artist_skip["plays"] > 50]
     artist_skip["skip_rate"] = artist_skip["skips"] / artist_skip["plays"]
 
     # Scatter plot
