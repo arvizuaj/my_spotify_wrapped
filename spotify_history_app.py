@@ -168,64 +168,73 @@ def classify_deliberate_served(row):
 st.title("🎧 Spotify History Analyzer")
 st.caption("Drop your Spotify Streaming_History_Audio_*.json files below and explore your listening history.")
 
-# ---------- Upload ----------
-st.sidebar.header("Your Spotify files")
-files = st.sidebar.file_uploader(
-    "Upload Streaming_History_Audio_*.json files",
-    type=["json"],
-    accept_multiple_files=True,
-)
+# ---------- Demo Mode Toggle ----------
+with st.sidebar:
+    demo_mode = st.toggle("Demo Mode", value=False)
 
-if not files:
-    st.info("👈 Upload one or more Spotify audio-history JSON files to begin.")
-    st.stop()
+# ---------- Demo Mode OR Upload Mode ----------
+if demo_mode:
+    st.sidebar.success("Demo Mode Active — Loaded Andrew's dataset")
+    f = pd.read_pickle("data/andrew_processed.pkl.gz", compression="gzip")
 
-df, bad_files = load_files(files)
+else:
+    # ---------- Upload ----------
+    st.sidebar.header("Your Spotify files")
+    files = st.sidebar.file_uploader(
+        "Upload Streaming_History_Audio_*.json files",
+        type=["json"],
+        accept_multiple_files=True,
+    )
 
-if bad_files:
-    st.warning("Some files could not be read:")
-    for name, err in bad_files:
-        st.write(f"- {name}: {err}")
+    if not files:
+        st.info("👈 Upload one or more Spotify audio-history JSON files to begin.")
+        st.stop()
 
-if df.empty:
-    st.error("No playable track records were found.")
-    st.stop()
+    df, bad_files = load_files(files)
 
-# ---------- Sidebar filters ----------
-st.sidebar.success(f"Loaded {len(df):,} listening events")
+    if bad_files:
+        st.warning("Some files could not be read:")
+        for name, err in bad_files:
+            st.write(f"- {name}: {err}")
 
-years = sorted(df["year"].dropna().unique().tolist())
-selected_years = st.sidebar.multiselect("Years", years, default=years)
+    if df.empty:
+        st.error("No playable track records were found.")
+        st.stop()
 
-artists = sorted(df["artist"].dropna().unique().tolist())
-artist_filter = st.sidebar.multiselect("Artists (optional)", artists, default=[])
+    # ---------- Sidebar filters ----------
+    st.sidebar.success(f"Loaded {len(df):,} listening events")
 
-min_minutes = st.sidebar.slider(
-    "Minimum minutes counted per play",
-    0.0, 5.0, 0.0, 0.25,
-)
+    years = sorted(df["year"].dropna().unique().tolist())
+    selected_years = st.sidebar.multiselect("Years", years, default=years)
 
-f = df[df["year"].isin(selected_years)].copy()
+    artists = sorted(df["artist"].dropna().unique().tolist())
+    artist_filter = st.sidebar.multiselect("Artists (optional)", artists, default=[])
 
-# Remove sleep / noise tracks globally
-bad_tracks = [
-    "Deep Phase Noise 1",
-    "Deep Relaxing Sleep Music (3 Hours)",
-    "Delta Waves: Inner Peace Sleep Music"
-]
+    min_minutes = st.sidebar.slider(
+        "Minimum minutes counted per play",
+        0.0, 5.0, 0.0, 0.25,
+    )
 
-f = f[~f["track"].isin(bad_tracks)]
+    f = df[df["year"].isin(selected_years)].copy()
 
-if artist_filter:
-    f = f[f["artist"].isin(artist_filter)]
+    # Remove sleep / noise tracks globally
+    bad_tracks = [
+        "Deep Phase Noise 1",
+        "Deep Relaxing Sleep Music (3 Hours)",
+        "Delta Waves: Inner Peace Sleep Music"
+    ]
 
-f = f[f["minutes"] >= min_minutes]
+    f = f[~f["track"].isin(bad_tracks)]
 
-if f.empty:
-    st.warning("No listening events match your filters.")
-    st.stop()
+    if artist_filter:
+        f = f[f["artist"].isin(artist_filter)]
 
-f.to_pickle("andrew_processed.pkl")
+    f = f[f["minutes"] >= min_minutes]
+
+    if f.empty:
+        st.warning("No listening events match your filters.")
+        st.stop()
+
 
 # ---------- Overview ----------
 st.header("🎵 Your Music DNA")
